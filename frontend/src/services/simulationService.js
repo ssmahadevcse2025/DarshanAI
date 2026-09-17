@@ -33,12 +33,16 @@ export const simulationService = {
 
   createWebSocket: (templeId, token) => {
     const customWs = import.meta.env.VITE_WS_URL;
-    if (customWs) {
+    if (customWs && customWs.startsWith('ws')) {
       return new WebSocket(`${customWs}/api/simulation/ws/${templeId}?token=${token}`);
     }
 
-    if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
-      return new WebSocket(`wss://darshanai-backend.onrender.com/api/simulation/ws/${templeId}?token=${token}`);
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+      if (!isLocal) {
+        return new WebSocket(`wss://darshanai-backend.onrender.com/api/simulation/ws/${templeId}?token=${token}`);
+      }
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
