@@ -5,8 +5,33 @@ import threading
 from typing import Dict, List, Optional
 import os
 
+
+_shared_yolo_model = None
+
+def get_shared_detector():
+    global _shared_yolo_model
+    if _shared_yolo_model is None:
+        try:
+            from ultralytics import YOLO
+            _shared_yolo_model = YOLO("yolov8n.pt")
+            print("[CCTV ENGINE] Shared YOLOv8n detector initialized successfully.")
+        except Exception as e:
+            print(f"[CCTV ENGINE NOTE] Vision pipeline fallback: {e}")
+            _shared_yolo_model = None
+    return _shared_yolo_model
+
+
 class CameraStreamProcessor:
-    def __init__(self, camera_id: str, temple_id: str, name: str, zone_code: str, capacity: int = 500, source_type: str = "TEST_VIDEO", stream_url: Optional[str] = None):
+    def __init__(
+        self,
+        camera_id: str,
+        temple_id: str,
+        name: str,
+        zone_code: str,
+        capacity: int = 500,
+        source_type: str = "TEST_VIDEO",
+        stream_url: Optional[str] = None
+    ):
         self.camera_id = camera_id
         self.temple_id = temple_id
         self.name = name
@@ -17,37 +42,40 @@ class CameraStreamProcessor:
         self.status = "ONLINE"
 
         self.person_count = 0
-        self.entry_rate = 35 # people / min
-        self.exit_rate = 22  # people / min
+        self.entry_rate = 35  # people / min
+        self.exit_rate = 22   # people / min
         self.fps = 15.0
         self.risk_level = "LOW"
         self.density_percent = 0.0
 
         self.last_frame_time = time.time()
         self.frame_count = 0
-        self.track_history = {} # track_id -> [centroids]
-        
-        # Synthetic walker simulation state for test video / stream
+        self.track_history = {}
+
+        # Synthetic crowd simulation state
         self.simulated_people = []
         self._init_synthetic_crowd()
 
-        # Try loading YOLOv8
-        self.yolo_model = None
-        self._init_detector()
+        # Video capture & thread management
+        self.cap = None
+        self.active_resolved_url = None
+        self.lock = threading.Lock()
+        self.stop_event = threading.Event()
+        self.capture_thread = None
 
-    def _init_detector(self):
-        try:
-            from ultralytics import YOLO
-            # Lightweight YOLOv8 nano model
-            self.yolo_model = YOLO("yolov8n.pt")
-            print(f"[CCTV ENGINE] YOLOv8n initialized for {self.camera_id}")
-        except Exception as e:
-            print(f"[CCTV ENGINE NOTE] Using OpenCV vision pipeline fallback for {self.camera_id}: {e}")
-            self.yolo_model = None
+        self.cached_raw_frame = None
+        self.cached_annotated_frame = None
+
+        # Shared YOLOv8 detector
+        self.yolo_model = get_shared_detector()
+
+        # If initialized with an external source, start worker
+        if self.source_type in ["YOUTUBE", "WEBCAM", "LIVE_CCTV"]:
+            self._start_capture_worker()
 
     def _init_synthetic_crowd(self):
-        # 15 to 45 simulated people walking in the camera field of view
         base_count = 28 if "queue" in self.zone_code else 18
+        self.simulated_people = []
         for i in range(base_count):
             self.simulated_people.append({
                 "id": i + 101,
@@ -57,42 +85,199 @@ class CameraStreamProcessor:
                 "vy": float(np.random.uniform(-0.8, 0.8)),
                 "h": float(np.random.randint(45, 75)),
                 "w": float(np.random.randint(22, 36)),
-                "color": (np.random.randint(180, 255), np.random.randint(120, 200), np.random.randint(50, 100))
+                "color": (
+                    int(np.random.randint(180, 255)),
+                    int(np.random.randint(120, 200)),
+                    int(np.random.randint(50, 100))
+                )
             })
 
-    def generate_frame(self) -> np.ndarray:
-        """Generates or captures a video frame, executes person detection, tracks persons, and draws HUD."""
-        # Standard 640x480 canvas
+    def _resolve_youtube_url(self, yt_url: str) -> Optional[str]:
+        try:
+            import yt_dlp
+            ydl_opts = {
+                "format": "bestvideo[height<=720]/bestvideo/best",
+                "quiet": True,
+                "no_warnings": True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(yt_url, download=False)
+                if "url" in info:
+                    return info["url"]
+                if "formats" in info and len(info["formats"]) > 0:
+                    return info["formats"][-1]["url"]
+        except Exception as err:
+            print(f"[CCTV ENGINE] yt-dlp resolution error for {yt_url}: {err}")
+        return None
+
+    def _start_capture_worker(self):
+        self._stop_capture_worker()
+        self.stop_event.clear()
+        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.capture_thread.start()
+
+    def _stop_capture_worker(self):
+        self.stop_event.set()
+        if self.cap:
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+            self.cap = None
+
+    def _capture_loop(self):
+        resolved_source = None
+        if self.source_type == "YOUTUBE":
+            target_url = self.stream_url or "https://www.youtube.com/watch?v=DJsHe1tDpg8"
+            resolved_source = self._resolve_youtube_url(target_url)
+        elif self.source_type == "WEBCAM":
+            resolved_source = 0
+        elif self.source_type == "LIVE_CCTV":
+            resolved_source = self.stream_url
+
+        if resolved_source is None and self.source_type != "WEBCAM":
+            print(f"[CCTV ENGINE] Could not resolve source for {self.camera_id}. Falling back to TEST_VIDEO.")
+            self.source_type = "TEST_VIDEO"
+            return
+
+        self.cap = cv2.VideoCapture(resolved_source)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        last_infer_time = 0
+        while not self.stop_event.is_set():
+            if not self.cap or not self.cap.isOpened():
+                time.sleep(1.0)
+                continue
+
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                # Reconnect attempt
+                time.sleep(1.0)
+                if self.source_type == "YOUTUBE":
+                    resolved_source = self._resolve_youtube_url(self.stream_url or "https://www.youtube.com/watch?v=DJsHe1tDpg8")
+                    if resolved_source:
+                        self.cap = cv2.VideoCapture(resolved_source)
+                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                continue
+
+            # Resize if excessively large for fast, smooth web streaming
+            h, w = frame.shape[:2]
+            if w > 1280:
+                frame = cv2.resize(frame, (1280, 720))
+
+            raw_copy = frame.copy()
+            annotated = frame.copy()
+
+            # Run YOLOv8 detection roughly 10-15 times per second
+            now = time.time()
+            devotee_count = self.person_count
+            if now - last_infer_time > 0.07:
+                last_infer_time = now
+                if self.yolo_model:
+                    try:
+                        results = self.yolo_model.predict(annotated, classes=[0], conf=0.35, verbose=False)
+                        detections = results[0].boxes
+                        devotee_count = len(detections)
+
+                        # Set status level and color scheme based on crowd density
+                        if devotee_count > 40:
+                            status_text = "HIGH CONGESTION"
+                            theme_color = (95, 42, 255)  # Amber / Red alert (BGR)
+                        elif devotee_count > 20:
+                            status_text = "MODERATE DENSITY"
+                            theme_color = (0, 214, 255)  # Yellow caution (BGR)
+                        else:
+                            status_text = "NORMAL FLOW"
+                            theme_color = (255, 210, 0)  # Cyan / Blue normal (BGR)
+
+                        for box in detections:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            conf = float(box.conf[0])
+                            cv2.rectangle(annotated, (x1, y1), (x2, y2), theme_color, 2)
+                            label = f"Devotee {conf:.2f}"
+                            cv2.putText(
+                                annotated,
+                                label,
+                                (x1, max(y1 - 6, 15)),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                theme_color,
+                                2,
+                                cv2.LINE_AA
+                            )
+
+                        # Top telemetry dashboard banner
+                        cv2.rectangle(annotated, (0, 0), (annotated.shape[1], 55), (13, 20, 36), -1)
+                        cv2.line(annotated, (0, 55), (annotated.shape[1], 55), theme_color, 2)
+
+                        # Metrics text overlay
+                        cv2.putText(
+                            annotated,
+                            f"DEVOTEES IN FRAME: {devotee_count}",
+                            (20, 36),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.75,
+                            (255, 255, 255),
+                            2,
+                            cv2.LINE_AA
+                        )
+                        cv2.putText(
+                            annotated,
+                            f"STATUS: {status_text}",
+                            (400, 36),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.65,
+                            theme_color,
+                            2,
+                            cv2.LINE_AA
+                        )
+                        cv2.putText(
+                            annotated,
+                            f"FPS: {self.fps:.1f}",
+                            (annotated.shape[1] - 140, 36),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6,
+                            (180, 180, 180),
+                            1,
+                            cv2.LINE_AA
+                        )
+
+                        self.person_count = devotee_count
+                        self.density_percent = min(100.0, round((self.person_count / max(1, self.capacity)) * 100, 1))
+                        self.risk_level = "CRITICAL" if self.density_percent > 85 else "HIGH" if self.density_percent > 70 else "MODERATE" if self.density_percent > 50 else "LOW"
+                    except Exception as infer_err:
+                        print(f"[CCTV INFERENCE ERROR] {infer_err}")
+
+            with self.lock:
+                self.cached_raw_frame = raw_copy
+                self.cached_annotated_frame = annotated
+
+            time.sleep(0.04)
+
+    def _generate_synthetic_frames(self):
+        """Generates synthetic temple corridor frames for simulation mode."""
         width, height = 640, 480
-        frame = np.zeros((height, width, 3), dtype=np.uint8)
-        
-        # Temple-style floor / background shading
-        frame[:, :] = (240, 246, 249) # Warm Ivory RGB in BGR: (240, 246, 249)
-        
+
+        # Base clean temple-style background
+        raw_frame = np.zeros((height, width, 3), dtype=np.uint8)
+        raw_frame[:, :] = (240, 246, 249)
+
         # Floor grid lines & corridor barriers
-        cv2.line(frame, (0, 120), (width, 120), (200, 215, 225), 1)
-        cv2.line(frame, (0, 240), (width, 240), (200, 215, 225), 1)
-        cv2.line(frame, (0, 360), (width, 360), (200, 215, 225), 1)
+        cv2.line(raw_frame, (0, 120), (width, 120), (200, 215, 225), 1)
+        cv2.line(raw_frame, (0, 240), (width, 240), (200, 215, 225), 1)
+        cv2.line(raw_frame, (0, 360), (width, 360), (200, 215, 225), 1)
 
         # Queue Corridor Guidelines (Gold & Maroon)
-        cv2.line(frame, (80, 60), (80, 440), (39, 155, 197), 2) # Temple Gold BGR
-        cv2.line(frame, (280, 60), (280, 440), (47, 29, 107), 2) # Temple Maroon BGR
-        cv2.line(frame, (480, 60), (480, 440), (39, 155, 197), 2)
+        cv2.line(raw_frame, (80, 60), (80, 440), (39, 155, 197), 2)
+        cv2.line(raw_frame, (280, 60), (280, 440), (47, 29, 107), 2)
+        cv2.line(raw_frame, (480, 60), (480, 440), (39, 155, 197), 2)
 
-        # Entry & Exit virtual detection tripwires
-        cv2.line(frame, (10, 200), (200, 200), (0, 180, 0), 2) # Entry Gate line
-        cv2.putText(frame, "ENTRY TRIPWIRE", (15, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 140, 0), 1)
-
-        cv2.line(frame, (440, 320), (630, 320), (0, 0, 220), 2) # Exit Gate line
-        cv2.putText(frame, "EXIT TRIPWIRE", (450, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 180), 1)
-
-        # Move simulated people
+        # Move simulated people on the raw frame
         detected_boxes = []
         for p in self.simulated_people:
             p["x"] += p["vx"]
             p["y"] += p["vy"]
 
-            # Bounce off walls
             if p["x"] < 30 or p["x"] > width - 50:
                 p["vx"] *= -1
             if p["y"] < 60 or p["y"] > height - 80:
@@ -101,54 +286,75 @@ class CameraStreamProcessor:
             x, y, w, h = int(p["x"]), int(p["y"]), int(p["w"]), int(p["h"])
             detected_boxes.append((x, y, w, h, p["id"]))
 
-            # Draw person silhouette
-            # Head
-            cv2.circle(frame, (x + w // 2, y + 8), 7, p["color"], -1)
-            cv2.circle(frame, (x + w // 2, y + 8), 7, (47, 29, 107), 1)
-            # Body
-            cv2.rectangle(frame, (x + 2, y + 16), (x + w - 2, y + h), p["color"], -1)
-            # Bounding box
-            box_color = (0, 180, 0) if self.risk_level == "LOW" else (0, 140, 255) if self.risk_level == "MODERATE" else (0, 0, 220)
-            cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
-            cv2.putText(frame, f"ID:{p['id']}", (x, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (47, 29, 107), 1)
+            # Draw person silhouette on RAW frame (clean visual, no AI overlays)
+            cv2.circle(raw_frame, (x + w // 2, y + 8), 7, p["color"], -1)
+            cv2.circle(raw_frame, (x + w // 2, y + 8), 7, (47, 29, 107), 1)
+            cv2.rectangle(raw_frame, (x + 2, y + 16), (x + w - 2, y + h), p["color"], -1)
+
+        # Create annotated frame copy
+        annotated_frame = raw_frame.copy()
+
+        # Entry & Exit virtual detection tripwires on annotated frame
+        cv2.line(annotated_frame, (10, 200), (200, 200), (0, 180, 0), 2)
+        cv2.putText(annotated_frame, "ENTRY TRIPWIRE", (15, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 140, 0), 1)
+
+        cv2.line(annotated_frame, (440, 320), (630, 320), (0, 0, 220), 2)
+        cv2.putText(annotated_frame, "EXIT TRIPWIRE", (450, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 180), 1)
 
         self.person_count = len(detected_boxes)
         self.density_percent = min(100.0, round((self.person_count / max(1, self.capacity)) * 100, 1))
 
-        # Determine Risk Level based on Density
         if self.density_percent > 85.0:
             self.risk_level = "CRITICAL"
+            box_color = (0, 0, 220)
         elif self.density_percent > 70.0:
             self.risk_level = "HIGH"
+            box_color = (0, 140, 255)
         elif self.density_percent > 50.0:
             self.risk_level = "MODERATE"
+            box_color = (0, 214, 255)
         else:
             self.risk_level = "LOW"
+            box_color = (0, 180, 0)
 
-        # Calculate FPS
+        # Draw bounding boxes and person badges on annotated frame
+        for x, y, w, h, pid in detected_boxes:
+            cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), box_color, 2)
+            cv2.putText(annotated_frame, f"P {pid}", (x, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (47, 29, 107), 1)
+
         now = time.time()
         dt = now - self.last_frame_time
         self.last_frame_time = now
         self.fps = round(1.0 / max(0.001, dt), 1)
 
-        # Draw HUD Overlays (Upper Banner & Bottom HUD)
-        # Top banner background
-        cv2.rectangle(frame, (0, 0), (width, 42), (47, 29, 107), -1) # Temple Maroon BGR
-        cv2.putText(frame, f"{self.camera_id} - {self.name.upper()}", (12, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (39, 155, 197), 1) # Gold
-        cv2.putText(frame, f"SOURCE: {self.source_type} | FPS: {self.fps} | 720p", (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
+        # Annotated frame top banner
+        cv2.rectangle(annotated_frame, (0, 0), (width, 42), (47, 29, 107), -1)
+        cv2.putText(annotated_frame, f"{self.camera_id} - {self.name.upper()}", (12, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (39, 155, 197), 1)
+        cv2.putText(annotated_frame, f"SOURCE: {self.source_type} | FPS: {self.fps} | 720p", (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
 
-        # Live Badge (Green Dot)
-        cv2.circle(frame, (width - 65, 20), 5, (0, 220, 0), -1)
-        cv2.putText(frame, "LIVE", (width - 52, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 240, 0), 2)
+        cv2.circle(annotated_frame, (width - 65, 20), 5, (0, 220, 0), -1)
+        cv2.putText(annotated_frame, "LIVE", (width - 52, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 240, 0), 2)
 
-        # Bottom Analytics HUD
-        cv2.rectangle(frame, (0, height - 36), (width, height), (30, 20, 15), -1)
-        risk_color = (0, 220, 0) if self.risk_level == "LOW" else (0, 160, 255) if self.risk_level == "MODERATE" else (0, 80, 255) if self.risk_level == "HIGH" else (0, 0, 255)
-        cv2.putText(frame, f"PERSON COUNT: {self.person_count}", (12, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(frame, f"DENSITY: {self.density_percent}%", (210, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(frame, f"RISK: {self.risk_level}", (410, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, risk_color, 2)
+        # Annotated frame bottom HUD
+        cv2.rectangle(annotated_frame, (0, height - 36), (width, height), (30, 20, 15), -1)
+        cv2.putText(annotated_frame, f"PERSON COUNT: {self.person_count}", (12, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        cv2.putText(annotated_frame, f"DENSITY: {self.density_percent}%", (210, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        cv2.putText(annotated_frame, f"RISK: {self.risk_level}", (410, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, box_color, 2)
 
-        return frame
+        return raw_frame, annotated_frame
+
+    def generate_frame(self, overlay: bool = True) -> np.ndarray:
+        """Returns either the raw unannotated frame (overlay=False) or annotated frame with YOLO detection (overlay=True)."""
+        if self.source_type in ["YOUTUBE", "WEBCAM", "LIVE_CCTV"]:
+            with self.lock:
+                if overlay and self.cached_annotated_frame is not None:
+                    return self.cached_annotated_frame
+                elif not overlay and self.cached_raw_frame is not None:
+                    return self.cached_raw_frame
+
+        # Fallback or TEST_VIDEO mode
+        raw, annotated = self._generate_synthetic_frames()
+        return annotated if overlay else raw
 
     def get_analytics(self) -> dict:
         return {
@@ -157,6 +363,7 @@ class CameraStreamProcessor:
             "name": self.name,
             "zone_code": self.zone_code,
             "source_type": self.source_type,
+            "stream_url": self.stream_url,
             "status": self.status,
             "person_count": self.person_count,
             "entry_rate": self.entry_rate,
@@ -167,6 +374,7 @@ class CameraStreamProcessor:
             "fps": self.fps,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         }
+
 
 class CCTVManager:
     def __init__(self):
@@ -212,10 +420,14 @@ class CCTVManager:
     def set_camera_source(self, camera_id: str, source_type: str, stream_url: Optional[str] = None):
         cam = self.get_camera(camera_id)
         if cam:
+            cam._stop_capture_worker()
             cam.source_type = source_type
             cam.stream_url = stream_url
             cam.status = "ONLINE"
+            if source_type in ["YOUTUBE", "WEBCAM", "LIVE_CCTV"]:
+                cam._start_capture_worker()
             return True
         return False
+
 
 cctv_manager = CCTVManager()

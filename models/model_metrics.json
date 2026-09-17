@@ -1,24 +1,24 @@
 {
   "crowd_regressor": {
-    "MAE": 82.01,
-    "RMSE": 176.39,
-    "R2": 0.9891
+    "MAE": 82.36,
+    "RMSE": 177.67,
+    "R2": 0.9889
   },
   "crowd_classifier": {
     "Accuracy": 0.9755,
-    "Precision": 0.9754,
+    "Precision": 0.9755,
     "Recall": 0.9755,
     "F1_Score": 0.9754,
     "Confusion_Matrix": [
       [
-        1258,
-        19,
+        1256,
+        21,
         0,
         0
       ],
       [
-        21,
-        433,
+        19,
+        435,
         0,
         0
       ],
@@ -37,28 +37,28 @@
     ]
   },
   "risk_classifier": {
-    "Accuracy": 0.98,
-    "Precision": 0.9801,
-    "Recall": 0.98,
-    "F1_Score": 0.98,
+    "Accuracy": 0.9817,
+    "Precision": 0.9818,
+    "Recall": 0.9817,
+    "F1_Score": 0.9817,
     "Confusion_Matrix": [
       [
-        902,
-        6,
+        904,
+        4,
         0,
         0
       ],
       [
         15,
-        368,
-        1,
+        369,
+        0,
         0
       ],
       [
         0,
-        4,
+        5,
         214,
-        1
+        0
       ],
       [
         3,
@@ -69,9 +69,9 @@
     ]
   },
   "waiting_time_model": {
-    "MAE": 3.31,
-    "RMSE": 16.29,
-    "R2": 0.9865
+    "MAE": 3.39,
+    "RMSE": 17.8,
+    "R2": 0.9839
   },
   "anomaly_model": {
     "contamination": 0.03,

@@ -6,7 +6,6 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor
 
-from ml.generate_dataset import generate_temple_crowd_dataset
 from ml.preprocessing import TempleDataPreprocessor
 from ml.evaluate_models import (
     evaluate_regression_model,
@@ -19,9 +18,9 @@ def train_all_models():
     print("[1/5] Loading or generating temple crowd dataset...")
     csv_path = os.path.join("data", "temple_crowd_dataset.csv")
     if not os.path.exists(csv_path):
-        df = generate_temple_crowd_dataset()
-    else:
-        df = pd.read_csv(csv_path)
+        from ml.generate_dataset import generate_synthetic_dataset
+        generate_synthetic_dataset(output_path=csv_path)
+    df = pd.read_csv(csv_path)
         
     print(f"[DATASET LOADED] {len(df)} rows found.")
     

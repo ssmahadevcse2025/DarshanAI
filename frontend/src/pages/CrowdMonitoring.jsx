@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../services/api';
 import { AuthContext } from '../context/AuthContext';
-import CrowdCard from '../components/CrowdCard';
 import Loading from '../components/Loading';
 import { 
   Camera, 
@@ -20,7 +19,17 @@ import {
   Clock,
   Eye,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Maximize2,
+  Minimize2,
+  Radio,
+  Sliders,
+  Youtube,
+  Layers,
+  Download,
+  Flame,
+  Zap,
+  Info
 } from 'lucide-react';
 
 const CrowdMonitoring = () => {
@@ -34,6 +43,22 @@ const CrowdMonitoring = () => {
   const [loading, setLoading] = useState(true);
   const [changingSource, setChangingSource] = useState(false);
   const [error, setError] = useState(null);
+
+  // View Layout: 'dual' (Side-by-Side), 'raw' (Raw Only), 'detection' (AI Detection Only)
+  const [viewMode, setViewMode] = useState('dual');
+  const [fullscreenFeed, setFullscreenFeed] = useState(null); // 'raw' | 'detection' | null
+
+  // YouTube live stream configuration
+  const [youtubeUrl, setYoutubeUrl] = useState('https://www.youtube.com/watch?v=DJsHe1tDpg8');
+  const [isConnectingYt, setIsConnectingYt] = useState(false);
+  const [ytSuccessMsg, setYtSuccessMsg] = useState('');
+  const [showSourceConfig, setShowSourceConfig] = useState(false);
+
+  // Stream refresh key to force re-render when switching cameras
+  const [streamKey, setStreamKey] = useState(Date.now());
+
+  const rawImgRef = useRef(null);
+  const detectionImgRef = useRef(null);
 
   const fetchCCTVData = async () => {
     try {
@@ -61,220 +86,516 @@ const CrowdMonitoring = () => {
     return () => clearInterval(interval);
   }, [selectedCamId]);
 
-  const handleSourceChange = async (newSource) => {
+  const handleCameraSelect = (camId) => {
+    setSelectedCamId(camId);
+    setStreamKey(Date.now());
+  };
+
+  const handleSourceChange = async (newSource, customUrl = null) => {
     setChangingSource(true);
+    setYtSuccessMsg('');
     try {
-      await API.put(`/cctv/cameras/${selectedCamId}/source?source_type=${newSource}`);
-      fetchCCTVData();
+      const urlParam = customUrl ? `&stream_url=${encodeURIComponent(customUrl)}` : '';
+      await API.put(`/cctv/cameras/${selectedCamId}/source?source_type=${newSource}${urlParam}`);
+      setStreamKey(Date.now());
+      await fetchCCTVData();
+      if (newSource === 'YOUTUBE') {
+        setYtSuccessMsg('YouTube Live stream linked and processing with YOLOv8!');
+        setTimeout(() => setYtSuccessMsg(''), 4000);
+      }
     } catch (err) {
       console.error('Failed to switch camera source:', err);
+      setError('Failed to update camera video source.');
     } finally {
       setChangingSource(false);
     }
   };
 
+  const handleConnectYouTube = (e) => {
+    e.preventDefault();
+    if (!youtubeUrl.trim()) return;
+    setIsConnectingYt(true);
+    handleSourceChange('YOUTUBE', youtubeUrl.trim()).finally(() => {
+      setIsConnectingYt(false);
+    });
+  };
+
+  const handleTakeSnapshot = (type) => {
+    const imgElement = type === 'raw' ? rawImgRef.current : detectionImgRef.current;
+    if (!imgElement) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = imgElement.naturalWidth || 1280;
+      canvas.height = imgElement.naturalHeight || 720;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
+      const link = document.createElement('a');
+      link.download = `darshanai-${selectedCamId}-${type}-${Date.now()}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.9);
+      link.click();
+    } catch (e) {
+      // Fallback: open stream URL in new tab
+      const url = `${API.defaults.baseURL}/cctv/cameras/${selectedCamId}/${type === 'raw' ? 'raw-stream' : 'detection-stream'}`;
+      window.open(url, '_blank');
+    }
+  };
+
   if (loading && !analytics) return <Loading />;
 
-  const streamUrl = `${API.defaults.baseURL}/cctv/cameras/${selectedCamId}/stream`;
+  const rawStreamUrl = `${API.defaults.baseURL}/cctv/cameras/${selectedCamId}/raw-stream?t=${streamKey}`;
+  const detectionStreamUrl = `${API.defaults.baseURL}/cctv/cameras/${selectedCamId}/detection-stream?t=${streamKey}`;
+
+  const currentDevotees = analytics?.person_count || 0;
+  const isCongested = currentDevotees > 40;
+  const isModerate = currentDevotees > 20 && currentDevotees <= 40;
 
   return (
-    <div className="container-fluid p-4">
-      {/* Page Header */}
+    <div className="container-fluid p-3 p-md-4">
+      {/* Top Header & Surveillance Console Bar */}
       <div className="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
         <div>
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <h4 className="fw-bold text-maroon m-0 d-flex align-items-center gap-2">
-              <Camera size={24} /> CCTV-based real-time crowd intelligence
+              <Camera size={26} /> Dual-Feed CCTV Crowd Intelligence Center
             </h4>
             <span className="badge bg-success text-light px-3 py-2 fw-bold d-flex align-items-center gap-1 shadow-sm" style={{ fontSize: '0.75rem' }}>
               <span className="spinner-grow spinner-grow-sm" role="status" style={{ width: '8px', height: '8px' }}></span>
-              LIVE CCTV MODE
+              LIVE SURVEILLANCE
+            </span>
+            <span className="badge bg-maroon text-gold px-2 py-1 fw-semibold" style={{ fontSize: '0.72rem' }}>
+              YOLOv8 Nano • Person Detection
             </span>
           </div>
-          <small className="text-muted">Real-world OpenCV + YOLO person detection, centroid tracking, and zone density telemetry</small>
+          <small className="text-muted">
+            Side-by-side surveillance console: <strong>Frame 1 (Raw Camera Video)</strong> vs <strong>Frame 2 (Live AI People Detection & Count HUD)</strong>
+          </small>
         </div>
 
         <div className="d-flex flex-wrap align-items-center gap-2">
-          {/* Source Selector */}
-          <div className="d-flex align-items-center gap-1 bg-white p-1 rounded border border-beige">
-            <Video size={16} className="text-maroon ms-1" />
-            <select
-              className="form-select form-select-sm border-0 fw-bold text-maroon"
-              value={analytics?.source_type || 'TEST_VIDEO'}
-              onChange={e => handleSourceChange(e.target.value)}
-              disabled={changingSource}
-              style={{ width: '170px' }}
+          {/* View Mode Switcher Pills */}
+          <div className="btn-group btn-group-sm bg-white p-1 rounded border border-beige shadow-sm" role="group">
+            <button 
+              type="button" 
+              className={`btn btn-sm ${viewMode === 'dual' ? 'btn-maroon text-gold fw-bold' : 'btn-light text-dark'}`}
+              onClick={() => setViewMode('dual')}
             >
-              <option value="TEST_VIDEO">TEST VIDEO (Simulated)</option>
-              <option value="WEBCAM">LOCAL WEBCAM</option>
-              <option value="LIVE_CCTV">LIVE CCTV (RTSP)</option>
-            </select>
+              <Layers size={14} className="me-1" /> Dual Split View
+            </button>
+            <button 
+              type="button" 
+              className={`btn btn-sm ${viewMode === 'raw' ? 'btn-maroon text-gold fw-bold' : 'btn-light text-dark'}`}
+              onClick={() => setViewMode('raw')}
+            >
+              <Radio size={14} className="me-1 text-danger" /> Raw Video Only
+            </button>
+            <button 
+              type="button" 
+              className={`btn btn-sm ${viewMode === 'detection' ? 'btn-maroon text-gold fw-bold' : 'btn-light text-dark'}`}
+              onClick={() => setViewMode('detection')}
+            >
+              <Eye size={14} className="me-1 text-success" /> People Count Only
+            </button>
           </div>
+
+          {/* Quick Source Toggle Button */}
+          <button 
+            onClick={() => setShowSourceConfig(!showSourceConfig)}
+            className={`btn btn-sm d-flex align-items-center gap-1 border shadow-sm ${showSourceConfig ? 'btn-maroon text-gold fw-bold' : 'btn-white bg-white text-maroon border-beige'}`}
+          >
+            <Sliders size={15} /> Source: <strong>{analytics?.source_type || 'TEST_VIDEO'}</strong>
+          </button>
 
           <button 
             onClick={() => navigate('/simulation')} 
             className="btn btn-warning text-dark fw-bold btn-sm d-flex align-items-center gap-1 shadow-sm"
           >
-            <PlayCircle size={16} /> Open What-If Simulation
+            <PlayCircle size={15} /> Open Simulation
           </button>
 
-          <button onClick={fetchCCTVData} className="btn btn-outline-secondary btn-sm p-2">
+          <button onClick={fetchCCTVData} className="btn btn-outline-secondary btn-sm p-2 shadow-sm" title="Refresh Telemetry">
             <RefreshCw size={15} />
           </button>
         </div>
       </div>
 
-      {/* Camera Selection Navigation Pills */}
-      <div className="d-flex flex-wrap gap-2 mb-3">
+      {/* Video Source Configuration Panel (Collapsible / Dynamic) */}
+      {showSourceConfig && (
+        <div className="temple-card p-3 mb-3 gold-glow">
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom border-beige">
+            <h6 className="fw-bold text-maroon m-0 d-flex align-items-center gap-2">
+              <Sliders size={17} className="text-gold" /> Camera Video Source Configuration ({selectedCamId})
+            </h6>
+            <button 
+              className="btn btn-sm btn-close" 
+              onClick={() => setShowSourceConfig(false)}
+              aria-label="Close"
+            ></button>
+          </div>
+
+          <div className="row g-3 align-items-center">
+            <div className="col-md-4">
+              <label className="form-label small fw-bold text-dark-brown mb-1">Select Feed Input Source:</label>
+              <select
+                className="form-select form-select-sm fw-bold text-maroon border-beige"
+                value={analytics?.source_type || 'TEST_VIDEO'}
+                onChange={e => handleSourceChange(e.target.value)}
+                disabled={changingSource}
+              >
+                <option value="TEST_VIDEO">🎮 TEST VIDEO (Simulated Temple Corridor)</option>
+                <option value="YOUTUBE">🔴 YOUTUBE LIVE STREAM (HLS / m3u8)</option>
+                <option value="WEBCAM">📷 LOCAL WEBCAM (OpenCV Index 0)</option>
+                <option value="LIVE_CCTV">📹 RTSP / IP CCTV NETWORK CAMERA</option>
+              </select>
+            </div>
+
+            <div className="col-md-8">
+              <form onSubmit={handleConnectYouTube} className="d-flex flex-column gap-1">
+                <label className="form-label small fw-bold text-dark-brown mb-0">
+                  YouTube Live Stream URL (Auto-resolved via yt-dlp):
+                </label>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text bg-light text-danger border-beige">
+                    <Youtube size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={youtubeUrl}
+                    onChange={e => setYoutubeUrl(e.target.value)}
+                  />
+                  <button 
+                    type="submit" 
+                    className="btn btn-maroon text-gold fw-bold px-3"
+                    disabled={changingSource || isConnectingYt}
+                  >
+                    {isConnectingYt ? 'Connecting...' : 'Connect Feed'}
+                  </button>
+                </div>
+                <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                  <small className="text-muted" style={{ fontSize: '0.72rem' }}>Quick Presets:</small>
+                  <button 
+                    type="button" 
+                    className="btn btn-link p-0 text-maroon text-decoration-none small"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() => {
+                      setYoutubeUrl('https://www.youtube.com/watch?v=DJsHe1tDpg8');
+                      handleSourceChange('YOUTUBE', 'https://www.youtube.com/watch?v=DJsHe1tDpg8');
+                    }}
+                  >
+                    • Somnath Live Darshan
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-link p-0 text-secondary text-decoration-none small"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() => handleSourceChange('TEST_VIDEO')}
+                  >
+                    • Reset to Synthetic Corridor
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {ytSuccessMsg && (
+            <div className="alert alert-success alert-dismissible fade show mt-2 mb-0 py-2 small" role="alert">
+              <CheckCircle size={15} className="me-1" /> {ytSuccessMsg}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Camera Navigation Strip */}
+      <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <span className="small text-muted fw-bold me-1">ACTIVE CAMERAS:</span>
         {cameras.map(cam => (
           <button
             key={cam.camera_id}
-            onClick={() => setSelectedCamId(cam.camera_id)}
-            className={`btn btn-sm d-flex align-items-center gap-2 py-1 px-3 ${selectedCamId === cam.camera_id ? 'btn-maroon text-gold fw-bold shadow-sm' : 'btn-outline-secondary'}`}
+            onClick={() => handleCameraSelect(cam.camera_id)}
+            className={`btn btn-sm d-flex align-items-center gap-2 py-1 px-3 ${selectedCamId === cam.camera_id ? 'btn-maroon text-gold fw-bold shadow-sm' : 'btn-outline-secondary bg-white'}`}
             style={{ fontSize: '0.8rem' }}
           >
             <Camera size={14} />
             <span>{cam.camera_id}: {cam.name}</span>
             <span className={`badge ${cam.risk_level === 'CRITICAL' ? 'bg-danger' : cam.risk_level === 'HIGH' ? 'bg-warning text-dark' : 'bg-success'}`} style={{ fontSize: '0.65rem' }}>
-              {cam.person_count}
+              {cam.person_count} in frame
             </span>
           </button>
         ))}
       </div>
 
-      {/* Main CCTV Feed & Real-Time Analytics Row */}
+      {/* ========================================================================= */}
+      {/* SEPARATE SECTIONS / TWO FRAMES SURVEILLANCE DISPLAY                      */}
+      {/* ========================================================================= */}
       <div className="row g-3 mb-4">
-        {/* Left: Live Computer Vision MJPEG Stream Player */}
-        <div className="col-lg-7">
-          <div className="temple-card p-3 h-100 gold-glow">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-maroon text-gold">{selectedCamId}</span>
-                <h6 className="fw-bold text-maroon m-0">{analytics?.name}</h6>
+        {/* ===================================================================== */}
+        {/* FRAME 1: LIVE VIDEO (RAW UNPROCESSED FEED)                            */}
+        {/* ===================================================================== */}
+        {(viewMode === 'dual' || viewMode === 'raw') && (
+          <div className={viewMode === 'dual' ? 'col-lg-6' : 'col-12'}>
+            <div className="temple-card p-3 h-100 shadow-sm border border-secondary border-opacity-25">
+              {/* Frame 1 Header */}
+              <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-beige">
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-danger text-light fw-bold d-flex align-items-center gap-1 shadow-sm" style={{ fontSize: '0.72rem' }}>
+                    <span className="spinner-grow spinner-grow-sm" role="status" style={{ width: '6px', height: '6px' }}></span>
+                    FRAME 01 • LIVE VIDEO (RAW)
+                  </span>
+                  <span className="badge bg-maroon text-gold">{selectedCamId}</span>
+                </div>
+
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-ivory text-muted border border-beige" style={{ fontSize: '0.7rem' }}>
+                    Clean Sensor Output • Zero HUD
+                  </span>
+                  <button 
+                    className="btn btn-outline-secondary btn-sm p-1" 
+                    title="Capture Snapshot"
+                    onClick={() => handleTakeSnapshot('raw')}
+                  >
+                    <Download size={13} />
+                  </button>
+                </div>
               </div>
-              <span className="badge bg-ivory border border-beige text-dark-brown" style={{ fontSize: '0.72rem' }}>
-                Resolution: 1280x720 • {analytics?.fps || 15} FPS
-              </span>
-            </div>
 
-            {/* Video Container */}
-            <div 
-              className="position-relative rounded overflow-hidden shadow-inner bg-dark d-flex align-items-center justify-content-center"
-              style={{ minHeight: '360px', maxHeight: '420px', border: '2px solid #C59B27' }}
-            >
-              <img 
-                src={streamUrl} 
-                alt="Live CCTV Feed"
-                className="img-fluid w-100 h-100 object-fit-contain"
-                style={{ minHeight: '360px', maxHeight: '420px' }}
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400' fill='%232C1810'><rect width='100%' height='100%' fill='%23F9F6F0'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%236B1D2F' font-size='16'>CCTV Stream Active - Ingesting Telemetry</text></svg>";
+              {/* Frame 1 Video Player */}
+              <div 
+                className="position-relative rounded overflow-hidden shadow-inner bg-dark d-flex align-items-center justify-content-center"
+                style={{ 
+                  minHeight: viewMode === 'dual' ? '340px' : '480px', 
+                  maxHeight: viewMode === 'dual' ? '390px' : '580px', 
+                  border: '2px solid #2C1810' 
                 }}
-              />
+              >
+                <img 
+                  ref={rawImgRef}
+                  src={rawStreamUrl} 
+                  alt="Live Camera Video Raw Feed"
+                  className="img-fluid w-100 h-100 object-fit-contain"
+                  style={{ minHeight: viewMode === 'dual' ? '340px' : '480px', maxHeight: viewMode === 'dual' ? '390px' : '580px' }}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400' fill='%23111827'><rect width='100%' height='100%' fill='%231E293B'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%2394A3B8' font-size='15'>Live Raw Video Feed Ingesting...</text></svg>";
+                  }}
+                />
+
+                {/* Top overlay badge */}
+                <div className="position-absolute top-0 start-0 m-2 px-2 py-1 bg-dark bg-opacity-75 text-light rounded small fw-bold d-flex align-items-center gap-1" style={{ fontSize: '0.68rem', backdropFilter: 'blur(4px)' }}>
+                  <Radio size={12} className="text-danger" /> RAW FEED (1280x720)
+                </div>
+
+                {/* Bottom Source overlay tag */}
+                <div className="position-absolute bottom-0 start-0 m-2 px-2 py-1 bg-dark bg-opacity-75 text-light rounded small d-flex align-items-center gap-1" style={{ fontSize: '0.68rem', backdropFilter: 'blur(4px)' }}>
+                  <span>Source: <strong>{analytics?.source_type}</strong></span>
+                </div>
+              </div>
+
+              {/* Frame 1 Footer Metadata */}
+              <div className="d-flex justify-content-between align-items-center mt-2 text-muted small" style={{ fontSize: '0.75rem' }}>
+                <span className="d-flex align-items-center gap-1">
+                  <CheckCircle size={13} className="text-success" /> Untouched optical capture stream
+                </span>
+                <span>Transmission: <strong>~20 FPS MJPEG</strong></span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================== */}
+        {/* FRAME 2: LIVE VIDEO WITH PEOPLE COUNT (YOLOv8 DETECTION & HUD)        */}
+        {/* ===================================================================== */}
+        {(viewMode === 'dual' || viewMode === 'detection') && (
+          <div className={viewMode === 'dual' ? 'col-lg-6' : 'col-12'}>
+            <div className="temple-card p-3 h-100 gold-glow">
+              {/* Frame 2 Header */}
+              <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-beige">
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-success text-light fw-bold d-flex align-items-center gap-1 shadow-sm" style={{ fontSize: '0.72rem' }}>
+                    <span className="spinner-grow spinner-grow-sm" role="status" style={{ width: '6px', height: '6px' }}></span>
+                    FRAME 02 • LIVE VIDEO WITH PEOPLE COUNT
+                  </span>
+                  <span className="badge bg-maroon text-gold">{selectedCamId}</span>
+                </div>
+
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-ivory text-maroon border border-gold fw-bold" style={{ fontSize: '0.7rem' }}>
+                    YOLOv8 Nano • Centroid Tracking
+                  </span>
+                  <button 
+                    className="btn btn-outline-secondary btn-sm p-1" 
+                    title="Capture AI Detection Snapshot"
+                    onClick={() => handleTakeSnapshot('detection')}
+                  >
+                    <Download size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Frame 2 Video Player */}
+              <div 
+                className="position-relative rounded overflow-hidden shadow-inner bg-dark d-flex align-items-center justify-content-center"
+                style={{ 
+                  minHeight: viewMode === 'dual' ? '340px' : '480px', 
+                  maxHeight: viewMode === 'dual' ? '390px' : '580px', 
+                  border: '2px solid #C59B27' 
+                }}
+              >
+                <img 
+                  ref={detectionImgRef}
+                  src={detectionStreamUrl} 
+                  alt="Live Video with People Count Detection"
+                  className="img-fluid w-100 h-100 object-fit-contain"
+                  style={{ minHeight: viewMode === 'dual' ? '340px' : '480px', maxHeight: viewMode === 'dual' ? '390px' : '580px' }}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400' fill='%23111827'><rect width='100%' height='100%' fill='%231E293B'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23C59B27' font-size='15'>YOLOv8 Real-Time Crowd Telemetry Ingesting...</text></svg>";
+                  }}
+                />
+
+                {/* Top overlay badge */}
+                <div className="position-absolute top-0 start-0 m-2 px-2 py-1 bg-dark bg-opacity-75 text-light rounded small fw-bold d-flex align-items-center gap-1" style={{ fontSize: '0.68rem', backdropFilter: 'blur(4px)' }}>
+                  <Eye size={12} className="text-success" /> AI CROWD HUD • YOLOv8n
+                </div>
+
+                {/* Live Count overlay pill */}
+                <div 
+                  className={`position-absolute bottom-0 end-0 m-2 px-3 py-1 rounded shadow-sm fw-bold d-flex align-items-center gap-1 ${isCongested ? 'bg-danger text-light' : isModerate ? 'bg-warning text-dark' : 'bg-success text-light'}`}
+                  style={{ fontSize: '0.78rem', backdropFilter: 'blur(4px)' }}
+                >
+                  <Users size={14} />
+                  <span>COUNT: {currentDevotees} DEVOTEES</span>
+                </div>
+              </div>
+
+              {/* Frame 2 Footer Metadata */}
+              <div className="d-flex justify-content-between align-items-center mt-2 text-muted small" style={{ fontSize: '0.75rem' }}>
+                <span className="d-flex align-items-center gap-1">
+                  <Sparkles size={13} className="text-gold" /> Bounding Boxes & Centroid Inflow/Outflow Overlay
+                </span>
+                <span>FPS: <strong>{analytics?.fps || 15}</strong> • Latency: <strong>&lt; 50ms</strong></span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* REAL-TIME COMPARATIVE TELEMETRY & MULTI-HORIZON PREDICTIONS ROW          */}
+      {/* ========================================================================= */}
+      <div className="row g-3 mb-4">
+        {/* Left: Real-Time Telemetry Stats Cards */}
+        <div className="col-lg-7">
+          <div className="temple-card p-3 h-100">
+            <h6 className="fw-bold text-maroon mb-3 d-flex align-items-center gap-2">
+              <Activity size={17} className="text-gold" /> Real-Time Telemetry Analytics ({selectedCamId})
+            </h6>
+
+            <div className="row g-2 text-center mb-3">
+              <div className="col-3">
+                <div className="p-2 rounded bg-ivory border border-beige">
+                  <small className="text-muted d-block" style={{ fontSize: '0.68rem' }}>PEOPLE IN FRAME</small>
+                  <h3 className={`fw-bold m-0 ${isCongested ? 'text-danger' : isModerate ? 'text-warning' : 'text-maroon'}`}>
+                    {analytics?.person_count || 0}
+                  </h3>
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>/ {analytics?.capacity} cap</small>
+                </div>
+              </div>
+
+              <div className="col-3">
+                <div className="p-2 rounded bg-ivory border border-beige">
+                  <small className="text-muted d-block" style={{ fontSize: '0.68rem' }}>ENTRY FLOW</small>
+                  <h3 className="fw-bold text-primary m-0">{analytics?.entry_rate || 0}</h3>
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>devotees/min</small>
+                </div>
+              </div>
+
+              <div className="col-3">
+                <div className="p-2 rounded bg-ivory border border-beige">
+                  <small className="text-muted d-block" style={{ fontSize: '0.68rem' }}>EXIT FLOW</small>
+                  <h3 className="fw-bold text-warning m-0">{analytics?.exit_rate || 0}</h3>
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>devotees/min</small>
+                </div>
+              </div>
+
+              <div className="col-3">
+                <div className="p-2 rounded bg-ivory border border-beige">
+                  <small className="text-muted d-block" style={{ fontSize: '0.68rem' }}>RISK LEVEL</small>
+                  <h3 className={`fw-bold m-0 ${analytics?.risk_level === 'CRITICAL' ? 'text-danger' : analytics?.risk_level === 'HIGH' ? 'text-warning' : 'text-success'}`}>
+                    {analytics?.risk_level || 'LOW'}
+                  </h3>
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>{analytics?.density_percent}% load</small>
+                </div>
+              </div>
             </div>
 
-            <div className="d-flex justify-content-between align-items-center mt-2 text-muted small">
-              <span>Source Mode: <strong className="text-maroon">{analytics?.source_type}</strong></span>
-              <span>Computer Vision: <strong className="text-success">YOLOv8 + Centroid Tracking Active</strong></span>
+            {/* Density Meter */}
+            <div className="mb-2">
+              <div className="d-flex justify-content-between small mb-1">
+                <span className="text-muted">Zone Capacity Saturation</span>
+                <strong className={analytics?.density_percent > 80 ? 'text-danger' : analytics?.density_percent > 65 ? 'text-warning' : 'text-success'}>
+                  {analytics?.density_percent}% ({analytics?.risk_level})
+                </strong>
+              </div>
+              <div className="progress" style={{ height: '10px' }}>
+                <div 
+                  className={`progress-bar ${analytics?.density_percent > 80 ? 'bg-danger' : analytics?.density_percent > 65 ? 'bg-warning' : 'bg-success'}`}
+                  style={{ width: `${analytics?.density_percent}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="d-flex justify-content-between align-items-center pt-2 border-top border-beige text-muted small" style={{ fontSize: '0.75rem' }}>
+              <span>Zone: <strong>{analytics?.zone_code}</strong></span>
+              <span>Camera Name: <strong>{analytics?.name}</strong></span>
             </div>
           </div>
         </div>
 
-        {/* Right: Live Telemetry & Multi-Horizon ML Forecasts */}
+        {/* Right: Multi-Horizon ML Predictions */}
         <div className="col-lg-5">
-          <div className="d-flex flex-column gap-3 h-100">
-            {/* Live Camera Metrics Card */}
-            <div className="temple-card p-3">
-              <h6 className="fw-bold text-maroon mb-2 d-flex align-items-center gap-1">
-                <Activity size={16} className="text-gold" /> Live Detection Telemetry ({selectedCamId})
-              </h6>
-              
-              <div className="row g-2 text-center">
-                <div className="col-4">
-                  <div className="p-2 rounded bg-ivory border border-beige">
-                    <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>PERSON COUNT</small>
-                    <h4 className="fw-bold text-maroon m-0">{analytics?.person_count || 0}</h4>
-                    <small className="text-muted" style={{ fontSize: '0.65rem' }}>/ {analytics?.capacity} cap</small>
-                  </div>
-                </div>
-                <div className="col-4">
-                  <div className="p-2 rounded bg-ivory border border-beige">
-                    <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>ENTRY RATE</small>
-                    <h4 className="fw-bold text-primary m-0">{analytics?.entry_rate || 0}</h4>
-                    <small className="text-muted" style={{ fontSize: '0.65rem' }}>devotees/min</small>
-                  </div>
-                </div>
-                <div className="col-4">
-                  <div className="p-2 rounded bg-ivory border border-beige">
-                    <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>EXIT RATE</small>
-                    <h4 className="fw-bold text-warning m-0">{analytics?.exit_rate || 0}</h4>
-                    <small className="text-muted" style={{ fontSize: '0.65rem' }}>devotees/min</small>
-                  </div>
-                </div>
+          <div className="temple-card p-3 gold-glow h-100 d-flex flex-column justify-content-between">
+            <div>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="fw-bold text-maroon m-0 d-flex align-items-center gap-1">
+                  <Sparkles size={16} className="text-gold" /> AI Multi-Horizon Crowd Forecasts
+                </h6>
+                <span className="badge bg-ivory border border-gold text-maroon" style={{ fontSize: '0.68rem' }}>
+                  +15m • +30m • +60m
+                </span>
               </div>
 
-              {/* Occupancy Bar */}
-              <div className="mt-3">
-                <div className="d-flex justify-content-between small mb-1">
-                  <span className="text-muted">Zone Density Load</span>
-                  <strong className={analytics?.density_percent > 80 ? 'text-danger' : analytics?.density_percent > 65 ? 'text-warning' : 'text-success'}>
-                    {analytics?.density_percent}% ({analytics?.risk_level})
-                  </strong>
-                </div>
-                <div className="progress" style={{ height: '8px' }}>
-                  <div 
-                    className={`progress-bar ${analytics?.density_percent > 80 ? 'bg-danger' : analytics?.density_percent > 65 ? 'bg-warning' : 'bg-success'}`}
-                    style={{ width: `${analytics?.density_percent}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Multi-Horizon ML Crowd Prediction Card */}
-            <div className="temple-card p-3 gold-glow flex-grow-1 d-flex flex-column justify-content-between">
-              <div>
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <h6 className="fw-bold text-maroon m-0 d-flex align-items-center gap-1">
-                    <Sparkles size={16} className="text-gold" /> Multi-Horizon ML Forecasts
-                  </h6>
-                  <span className="badge bg-ivory border border-gold text-maroon" style={{ fontSize: '0.68rem' }}>
-                    +15m • +30m • +60m
-                  </span>
-                </div>
-
-                <div className="row g-2 mb-2">
-                  {(predictions?.horizons || [
-                    { horizon_label: '+15 min', predicted_crowd: 310, predicted_risk: 'LOW', estimated_wait_min: 14.5 },
-                    { horizon_label: '+30 min', predicted_crowd: 390, predicted_risk: 'MODERATE', estimated_wait_min: 22.0 },
-                    { horizon_label: '+60 min', predicted_crowd: 520, predicted_risk: 'HIGH', estimated_wait_min: 36.5 }
-                  ]).map((h, i) => (
-                    <div className="col-4" key={i}>
-                      <div className="p-2 rounded bg-ivory border border-beige text-center">
-                        <span className="badge bg-maroon text-gold mb-1" style={{ fontSize: '0.65rem' }}>{h.horizon_label}</span>
-                        <h5 className="fw-bold text-dark-brown m-0">{h.predicted_crowd}</h5>
-                        <small className="text-muted d-block" style={{ fontSize: '0.65rem' }}>{h.estimated_wait_min}m wait</small>
-                        <span className={`badge mt-1 ${h.predicted_risk === 'CRITICAL' ? 'bg-danger' : h.predicted_risk === 'HIGH' ? 'bg-warning text-dark' : 'bg-success'}`} style={{ fontSize: '0.62rem' }}>
-                          {h.predicted_risk}
-                        </span>
-                      </div>
+              <div className="row g-2 mb-2">
+                {(predictions?.horizons || [
+                  { horizon_label: '+15 min', predicted_crowd: 310, predicted_risk: 'LOW', estimated_wait_min: 14.5 },
+                  { horizon_label: '+30 min', predicted_crowd: 390, predicted_risk: 'MODERATE', estimated_wait_min: 22.0 },
+                  { horizon_label: '+60 min', predicted_crowd: 520, predicted_risk: 'HIGH', estimated_wait_min: 36.5 }
+                ]).map((h, i) => (
+                  <div className="col-4" key={i}>
+                    <div className="p-2 rounded bg-ivory border border-beige text-center">
+                      <span className="badge bg-maroon text-gold mb-1" style={{ fontSize: '0.65rem' }}>{h.horizon_label}</span>
+                      <h5 className="fw-bold text-dark-brown m-0">{h.predicted_crowd}</h5>
+                      <small className="text-muted d-block" style={{ fontSize: '0.65rem' }}>{h.estimated_wait_min}m wait</small>
+                      <span className={`badge mt-1 ${h.predicted_risk === 'CRITICAL' ? 'bg-danger' : h.predicted_risk === 'HIGH' ? 'bg-warning text-dark' : 'bg-success'}`} style={{ fontSize: '0.62rem' }}>
+                        {h.predicted_risk}
+                      </span>
                     </div>
-                  ))}
-                </div>
-
-                {/* AI Recommendation Quote */}
-                <div className="p-2 rounded bg-white border border-beige small text-dark-brown fst-italic mb-2">
-                  "{predictions?.ai_recommendation || 'Deploy auxiliary queue marshals and monitor sanctum throughput.'}"
-                </div>
+                  </div>
+                ))}
               </div>
 
-              <button 
-                onClick={() => navigate('/simulation')} 
-                className="btn btn-maroon text-gold btn-sm fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-1 shadow-sm"
-              >
-                <PlayCircle size={16} /> Test What-If Scenario with Live State
-              </button>
+              <div className="p-2 rounded bg-white border border-beige small text-dark-brown fst-italic mb-2">
+                "{predictions?.ai_recommendation || 'Continuous YOLO detection active across corridors. Maintain current gate throughput.'}"
+              </div>
             </div>
+
+            <button 
+              onClick={() => navigate('/simulation')} 
+              className="btn btn-maroon text-gold btn-sm fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-1 shadow-sm"
+            >
+              <PlayCircle size={15} /> Open Simulation with Live Telemetry
+            </button>
           </div>
         </div>
       </div>

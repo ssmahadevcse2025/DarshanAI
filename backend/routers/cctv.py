@@ -24,28 +24,54 @@ def get_cameras(
     cams = cctv_manager.list_cameras_for_temple(temple_id)
     return [cam.get_analytics() for cam in cams]
 
-def _generate_mjpeg_stream(camera_id: str):
+def _generate_mjpeg_stream(camera_id: str, overlay: bool = True):
     cam = cctv_manager.get_camera(camera_id)
     if not cam:
         return
     while True:
-        frame = cam.generate_frame()
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        frame = cam.generate_frame(overlay=overlay)
+        if frame is None:
+            time.sleep(0.05)
+            continue
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         if not ret:
             continue
         frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        time.sleep(0.065) # ~15 FPS transmission
+        time.sleep(0.05)  # ~20 FPS transmission
 
 @router.get("/cameras/{camera_id}/stream")
-def stream_camera(camera_id: str):
-    """Real-time MJPEG live video feed with bounding box HUD overlay."""
+def stream_camera(camera_id: str, mode: str = Query("detection", pattern="^(detection|raw)$")):
+    """Real-time MJPEG live video feed (detection with HUD or raw unannotated)."""
+    cam = cctv_manager.get_camera(camera_id)
+    if not cam:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    overlay = (mode == "detection")
+    return StreamingResponse(
+        _generate_mjpeg_stream(camera_id, overlay=overlay),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@router.get("/cameras/{camera_id}/raw-stream")
+def raw_stream_camera(camera_id: str):
+    """Real-time raw MJPEG feed without bounding box overlays."""
     cam = cctv_manager.get_camera(camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
     return StreamingResponse(
-        _generate_mjpeg_stream(camera_id),
+        _generate_mjpeg_stream(camera_id, overlay=False),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@router.get("/cameras/{camera_id}/detection-stream")
+def detection_stream_camera(camera_id: str):
+    """Real-time detection MJPEG feed with people count and YOLO bounding boxes."""
+    cam = cctv_manager.get_camera(camera_id)
+    if not cam:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    return StreamingResponse(
+        _generate_mjpeg_stream(camera_id, overlay=True),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -84,11 +110,11 @@ def get_camera_analytics(
 @router.put("/cameras/{camera_id}/source")
 def update_camera_source(
     camera_id: str,
-    source_type: str = Query(..., regex="^(LIVE_CCTV|WEBCAM|TEST_VIDEO)$"),
+    source_type: str = Query(..., pattern="^(LIVE_CCTV|WEBCAM|TEST_VIDEO|YOUTUBE)$"),
     stream_url: Optional[str] = None,
     current_user: User = Depends(get_current_user)
 ):
-    """Switch camera input between Live RTSP, Local Webcam, and Test Video stream."""
+    """Switch camera input between YouTube Live, RTSP, Local Webcam, and Test Video."""
     success = cctv_manager.set_camera_source(camera_id, source_type, stream_url)
     if not success:
         raise HTTPException(status_code=404, detail="Camera not found")
