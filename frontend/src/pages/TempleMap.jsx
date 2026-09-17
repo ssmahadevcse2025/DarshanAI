@@ -49,29 +49,32 @@ const TempleMapPage = () => {
     }
   }, [user]);
 
-  const fetchMapData = async (templeId) => {
+  const fetchMapData = async (templeId, isInitial = false) => {
     try {
       const res = await API.get(`/temples/${templeId}/map-data`);
       setMapData(res.data);
       if (res.data.zones && res.data.zones.length > 0 && !selectedZone) {
         setSelectedZone(res.data.zones[0]);
       }
-      setEditForm({
-        latitude: res.data.temple.latitude,
-        longitude: res.data.temple.longitude,
-        address: res.data.temple.address || '',
-        zoom_level: res.data.temple.zoom_level || 18
-      });
+      if (isInitial) {
+        setEditForm({
+          latitude: res.data.temple.latitude,
+          longitude: res.data.temple.longitude,
+          address: res.data.temple.address || '',
+          zoom_level: res.data.temple.zoom_level || 18
+        });
+      }
     } catch (err) {
       console.error('Failed to load map data:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMapData(selectedTempleId);
-    const interval = setInterval(() => fetchMapData(selectedTempleId), 5000);
+    setLoading(true);
+    fetchMapData(selectedTempleId, true);
+    const interval = setInterval(() => fetchMapData(selectedTempleId, false), 5000);
     return () => clearInterval(interval);
   }, [selectedTempleId]);
 
@@ -79,7 +82,7 @@ const TempleMapPage = () => {
     setSelectedTempleId(newTempleId);
     setSelectedZone(null);
     setLoading(true);
-    fetchMapData(newTempleId);
+    fetchMapData(newTempleId, true);
   };
 
   const handleLocationSubmit = async (e) => {

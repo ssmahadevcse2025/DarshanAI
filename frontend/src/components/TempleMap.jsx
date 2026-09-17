@@ -1,20 +1,32 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Polygon, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, Shield, Users, HeartPulse, Flame, Utensils, LogOut, Car, AlertTriangle, CheckCircle } from 'lucide-react';
 
-// Controller component to smoothly fly map to new temple coordinates when switching temples
-const MapController = ({ center, zoom }) => {
+// Controller component to smoothly update map center ONLY when temple or coordinates change significantly
+const MapController = ({ targetLat, targetLng, zoom = 18 }) => {
   const map = useMap();
+  const prevCoordsRef = useRef({ lat: null, lng: null, zoom: null });
+
   useEffect(() => {
-    if (center && typeof center[0] === 'number' && typeof center[1] === 'number' && !isNaN(center[0]) && !isNaN(center[1])) {
-      map.flyTo(center, zoom || 18, {
-        duration: 1.5,
-        easeLinearity: 0.25
-      });
+    if (typeof targetLat !== 'number' || typeof targetLng !== 'number' || isNaN(targetLat) || isNaN(targetLng)) {
+      return;
     }
-  }, [center, zoom, map]);
+
+    const prev = prevCoordsRef.current;
+    const latDiff = prev.lat !== null ? Math.abs(prev.lat - targetLat) : 999;
+    const lngDiff = prev.lng !== null ? Math.abs(prev.lng - targetLng) : 999;
+    const zoomDiff = prev.zoom !== null ? Math.abs(prev.zoom - zoom) : 999;
+
+    // Only reposition map if coordinates changed significantly (e.g. switching temples)
+    // This prevents continuous flyTo animation loops and vibration/shaking
+    if (latDiff > 0.001 || lngDiff > 0.001 || zoomDiff >= 1) {
+      prevCoordsRef.current = { lat: targetLat, lng: targetLng, zoom };
+      map.setView([targetLat, targetLng], zoom || 18, { animate: false });
+    }
+  }, [targetLat, targetLng, zoom, map]);
+
   return null;
 };
 
@@ -123,7 +135,7 @@ const TempleMap = ({
         scrollWheelZoom={true} 
         style={{ width: '100%', height: '100%', minHeight: '420px' }}
       >
-        <MapController center={[safeLat, safeLng]} zoom={zoomLevel} />
+        <MapController targetLat={safeLat} targetLng={safeLng} zoom={zoomLevel} />
         
         {/* OpenStreetMap Standard Tiles */}
         <TileLayer
