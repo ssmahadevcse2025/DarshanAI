@@ -75,6 +75,46 @@ def detection_stream_camera(camera_id: str):
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
+def _generate_yolo_opencv_stream(camera_id: str = "CAM-001"):
+    counter = cctv_manager.get_yolo_counter()
+    if camera_id and counter.linked_camera_id != camera_id:
+        counter.linked_camera_id = camera_id
+    while True:
+        frame = counter.generate_yolo_opencv_frame()
+        if frame is None:
+            time.sleep(0.05)
+            continue
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not ret:
+            continue
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.045)  # ~22 FPS transmission
+
+@router.get("/yolo-opencv-stream")
+def yolo_opencv_stream(camera_id: str = Query("CAM-001")):
+    """Dedicated Frame 4 Real-time MJPEG live stream powered by YOLOv8 + OpenCV people counter."""
+    return StreamingResponse(
+        _generate_yolo_opencv_stream(camera_id=camera_id),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@router.get("/yolo-opencv/analytics")
+def get_yolo_opencv_analytics(camera_id: str = Query("CAM-001")):
+    """Fetch real-time YOLO + OpenCV computer vision detection telemetry for Frame 4."""
+    return cctv_manager.get_yolo_opencv_analytics(camera_id)
+
+@router.put("/yolo-opencv/source")
+def update_yolo_opencv_source(
+    source_type: str = Query(..., pattern="^(CAMERA|YOUTUBE|SYNTHETIC_CROWD|WEBCAM|DEVOTEES_QUEUE|TEMPLE_ENTRANCE|GATE_RUSH)$"),
+    stream_url: Optional[str] = None,
+    camera_id: str = Query("CAM-001")
+):
+    """Switch Frame 4 YOLO+OpenCV source (Real Devotee Queues, Entrance Crowd, Gate Waiting, YouTube live stream, Corridor Camera, Synthetic Crowd)."""
+    cctv_manager.set_yolo_counter_source(source_type, stream_url, camera_id)
+    return {"status": "success", "source_type": source_type, "stream_url": stream_url}
+
 @router.get("/cameras/{camera_id}/analytics")
 def get_camera_analytics(
     camera_id: str,
