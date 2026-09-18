@@ -300,12 +300,14 @@ docker-compose up --build
 
 ---
 
-## 👥 Contributors & Collaboration
+## 👥 Contributors
 
-Developed with passion for pilgrim safety, smart governance, and intelligent computer vision.
+Developed with passion for pilgrim safety, smart governance, and intelligent computer vision:
 
-- **Primary Repository**: [github.com/ssmahadevcse2025/DarshanAI](https://github.com/ssmahadevcse2025/DarshanAI)
-- **Assisted by**: Google Antigravity Collaborative Pair-Programming
+- **K. Aadhavan** — [@adhavanmasscoc-maker](https://github.com/adhavanmasscoc-maker)
+- **Shenbagamahadevan** — [@ssmahadevcse2025](https://github.com/ssmahadevcse2025)
+
+**Repository**: [github.com/ssmahadevcse2025/DarshanAI](https://github.com/ssmahadevcse2025/DarshanAI)
 
 ---
 

@@ -1,22 +1,8 @@
-\# Acknowledgement
+# Acknowledgement
 
+## Project Contributors
 
+- **K. Aadhavan** ([@adhavanmasscoc-maker](https://github.com/adhavanmasscoc-maker))
+- **Shenbagamahadevan** ([@ssmahadevcse2025](https://github.com/ssmahadevcse2025))
 
-\## Debugging Contribution
-
-
-
-I contributed to the DARSHANAI project by reviewing the project setup, documentation, and development workflow.
-
-
-
-\*\*Contributor:\*\* Aadhavan
-
-\*\*GitHub:\*\* @adhavanmasscoc-maker
-
-
-
-This file documents my participation in the project.
-
-
-
+This project is developed collaboratively for the DARSHANAI multi-temple crowd intelligence and devotee safety management platform.
