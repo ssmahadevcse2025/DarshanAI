@@ -1,0 +1,14 @@
+{
+  "name": "darshan-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DarshanAI - Intelligent Temple Crowd Management & Devotee Analytics Platform",
+  "scripts": {
+    "pull": "git pull origin main",
+    "sync": "git pull origin main",
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "python backend/main.py",
+    "build": "npm --prefix frontend run build"
+  }
+}

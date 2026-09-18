@@ -40,11 +40,31 @@ DARSHANAI is an end-to-end Machine Learning and IoT operational simulation syste
 
 ## 🚀 Quickstart Guide
 
+### 🔄 Team Collaboration & Pulling Latest Changes
+
+Whenever starting a work session or collaborating with team members (especially in **Antigravity**):
+
+```bash
+# Option 1: 1-Click Windows Batch Script (Double-click in Explorer or run in terminal)
+.\pull_latest.bat
+
+# Option 2: PowerShell script
+.\pull_latest.ps1
+
+# Option 3: npm script from repository root
+npm run pull
+
+# Option 4: Linux / macOS / Git Bash
+./pull_latest.sh
+```
+
+> **Antigravity Users:** Workspace configuration in [`AGENTS.md`](./AGENTS.md) is pre-configured to ensure Antigravity checks and pulls the latest team updates on session startup.
+
 ### 1. Installation & Environment Setup
 
 ```bash
-# Clone repository
-cd mlp
+# Navigate to repository root
+cd dharshan-ai
 
 # Install Backend Python dependencies
 pip install -r requirements.txt
