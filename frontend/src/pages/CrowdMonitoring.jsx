@@ -185,7 +185,7 @@ const CrowdMonitoring = () => {
 
   useEffect(() => {
     fetchCCTVData();
-    const interval = setInterval(fetchCCTVData, 2500);
+    const interval = setInterval(fetchCCTVData, 5000);
     return () => clearInterval(interval);
   }, [selectedCamId]);
 

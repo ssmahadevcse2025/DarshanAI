@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
 
 from backend.config import settings
@@ -20,6 +21,9 @@ app = FastAPI(
     version=settings.VERSION,
     description="DarshanAI - AI-Powered Multi-Temple Crowd Intelligence & Safety Management System"
 )
+
+# Enable GZIP compression for fast payload transfers (>1KB)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Configure CORS
 app.add_middleware(

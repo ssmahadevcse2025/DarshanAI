@@ -6,14 +6,14 @@ databases:
     plan: free
 
 services:
-  # FastAPI Backend
+  # FastAPI Backend (Memory Optimized for 512MB RAM)
   - type: web
     name: darshanai-backend
     runtime: python
     region: oregon
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn backend.main:app -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT"
+    startCommand: "gunicorn backend.main:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT --max-requests 500 --max-requests-jitter 50"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -27,6 +27,8 @@ services:
         value: "480"
       - key: CORS_ORIGINS
         value: "*"
+      - key: PYTHONUNBUFFERED
+        value: "1"
 
   # React Vite Frontend
   - type: web
