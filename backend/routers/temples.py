@@ -45,9 +45,18 @@ def create_temple(
     db.refresh(temple)
     return temple
 
+_temple_map_cache = {}
+_temple_map_cache_exp = {}
+
 @router.get("/{temple_identifier}/map-data", response_model=TempleMapResponse)
 def get_temple_map_data(temple_identifier: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Fetch geographically accurate map data, zone overlays, live crowd counts, and AI risk predictions."""
+    """Fetch geographically accurate map data, zone overlays, live crowd counts, and AI risk predictions (cached)."""
+    import time
+    cache_key = f"map_{temple_identifier}"
+    now = time.time()
+    if cache_key in _temple_map_cache and now < _temple_map_cache_exp.get(cache_key, 0):
+        return _temple_map_cache[cache_key]
+
     # Find by temple_id (e.g. TEMPLE-001) or id
     temple = db.query(Temple).filter((Temple.temple_id == temple_identifier) | (Temple.id == temple_identifier)).first()
     if not temple:
@@ -117,7 +126,7 @@ def get_temple_map_data(temple_identifier: str, current_user: User = Depends(get
         except Exception:
             boundary_coords = None
 
-    return TempleMapResponse(
+    result = TempleMapResponse(
         temple=TempleResponse.from_orm(temple),
         zones=zone_responses,
         boundary_coordinates=boundary_coords,
@@ -126,6 +135,9 @@ def get_temple_map_data(temple_identifier: str, current_user: User = Depends(get
         total_waiting_devotees=sim_state.get("queue_length", 1248),
         overall_temple_risk=sim_state.get("risk_level", "LOW")
     )
+    _temple_map_cache[cache_key] = result
+    _temple_map_cache_exp[cache_key] = now + 2.5
+    return result
 
 @router.put("/{temple_id}/location", response_model=TempleResponse)
 def update_temple_location(

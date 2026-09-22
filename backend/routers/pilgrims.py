@@ -25,9 +25,16 @@ CATEGORY_PREFIXES = {
     "Other": "OTH"
 }
 
+_pilgrim_cache = {}
+_pilgrim_cache_exp = {}
+
 @router.get("/queue-summary", response_model=QueueSummaryResponse)
 def get_queue_summary(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     temple_id = current_user.temple_id or "TEMPLE-001"
+    now = datetime.utcnow().timestamp()
+    if temple_id in _pilgrim_cache and now < _pilgrim_cache_exp.get(temple_id, 0):
+        return _pilgrim_cache[temple_id]
+
     simulator = simulation_manager.get_simulator(temple_id)
     sim_state = simulator.get_current_state()
     
@@ -60,7 +67,7 @@ def get_queue_summary(current_user: User = Depends(get_current_user), db: Sessio
 
     total_active = sum(cat_counts.values())
 
-    return QueueSummaryResponse(
+    response = QueueSummaryResponse(
         total_active_devotees=total_active,
         category_breakdown=cat_counts,
         status_breakdown=status_counts,
@@ -74,6 +81,9 @@ def get_queue_summary(current_user: User = Depends(get_current_user), db: Sessio
         current_token_serving="TKN-GEN-104",
         estimated_avg_wait_min=sim_state["waiting_time"]
     )
+    _pilgrim_cache[temple_id] = response
+    _pilgrim_cache_exp[temple_id] = now + 2.0
+    return response
 
 @router.get("", response_model=List[PilgrimResponse])
 def get_pilgrims(

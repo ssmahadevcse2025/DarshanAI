@@ -22,10 +22,12 @@ const QueueManagement = () => {
 
   const fetchQueueData = async () => {
     try {
-      const summaryRes = await API.get('/pilgrims/queue-summary');
-      setSummary(summaryRes.data);
-      const listRes = await API.get('/pilgrims');
-      setTokens(listRes.data);
+      const [sumRes, listRes] = await Promise.allSettled([
+        API.get('/pilgrims/queue-summary'),
+        API.get('/pilgrims')
+      ]);
+      if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
+      if (listRes.status === 'fulfilled') setTokens(listRes.value.data);
     } catch (err) {
       console.error(err);
     } finally {

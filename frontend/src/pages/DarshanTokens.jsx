@@ -18,16 +18,18 @@ const DarshanTokens = () => {
 
   const fetchQueueData = async () => {
     try {
-      const summaryRes = await API.get('/pilgrims/queue-summary');
-      setSummary(summaryRes.data);
-
       let url = `/pilgrims?page=${page}&limit=${limit}`;
       if (statusFilter !== 'ALL') url += `&status=${statusFilter}`;
       if (categoryFilter !== 'ALL') url += `&category=${encodeURIComponent(categoryFilter)}`;
       if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
 
-      const tokensRes = await API.get(url);
-      setTokens(tokensRes.data);
+      const [summaryRes, tokensRes] = await Promise.allSettled([
+        API.get('/pilgrims/queue-summary'),
+        API.get(url)
+      ]);
+
+      if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data);
+      if (tokensRes.status === 'fulfilled') setTokens(tokensRes.value.data);
     } catch (err) {
       console.error('Failed to fetch queue tokens', err);
     } finally {

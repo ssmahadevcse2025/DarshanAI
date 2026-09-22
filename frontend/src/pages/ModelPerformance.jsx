@@ -12,10 +12,12 @@ const ModelPerformance = () => {
 
   const loadData = async () => {
     try {
-      const perfData = await mlService.getModelPerformance();
-      const featData = await mlService.getFeatureImportance();
-      setMetrics(perfData || {});
-      setImportance(featData?.crowd_regressor?.slice(0, 8) || []);
+      const [perfRes, featRes] = await Promise.allSettled([
+        mlService.getModelPerformance(),
+        mlService.getFeatureImportance()
+      ]);
+      if (perfRes.status === 'fulfilled') setMetrics(perfRes.value || {});
+      if (featRes.status === 'fulfilled') setImportance(featRes.value?.crowd_regressor?.slice(0, 8) || []);
       setError(null);
     } catch (err) {
       console.error('Failed to load ML metrics:', err);
