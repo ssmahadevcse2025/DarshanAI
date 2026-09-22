@@ -67,19 +67,48 @@ class TempleDataPreprocessor:
         return X_scaled, feature_cols
 
     def transform_single(self, input_dict):
-        """Preprocesses a single real-time payload dictionary for model inference."""
-        df = pd.DataFrame([input_dict])
+        """Preprocesses a single real-time payload dictionary for model inference with defensive field mapping."""
+        d = dict(input_dict)
         
-        # Defaults if missing
-        if "weather" not in df.columns:
-            df["weather"] = "Clear"
-        if "festival_type" not in df.columns:
-            df["festival_type"] = "None"
-        if "month" not in df.columns:
-            df["month"] = 1
-        if "day_of_week" not in df.columns:
-            df["day_of_week"] = 0
-            
+        # Field Aliases & Defensive Mapping
+        if "number_of_open_gates" not in d:
+            d["number_of_open_gates"] = d.get("open_gates", 4)
+        if "staff_available" not in d:
+            d["staff_available"] = d.get("staff_on_duty", 15)
+        if "rainfall" not in d:
+            d["rainfall"] = d.get("precipitation", 0.0)
+        if "weather" not in d:
+            d["weather"] = "Clear"
+        if "festival_type" not in d:
+            d["festival_type"] = "None"
+        if "month" not in d:
+            d["month"] = 1
+        if "day_of_week" not in d:
+            d["day_of_week"] = 0
+        if "is_weekend" not in d:
+            d["is_weekend"] = 1 if d.get("day_of_week", 0) in [5, 6] else 0
+        if "is_holiday" not in d:
+            d["is_holiday"] = 0
+        if "is_festival" not in d:
+            d["is_festival"] = 0
+        if "special_event" not in d:
+            d["special_event"] = 0
+        if "previous_hour_visitors" not in d:
+            d["previous_hour_visitors"] = d.get("visitor_count", 450)
+        if "previous_day_visitors" not in d:
+            d["previous_day_visitors"] = 5200
+        if "average_service_time" not in d:
+            d["average_service_time"] = 2.5
+        if "temperature" not in d:
+            d["temperature"] = 28.0
+        if "entry_rate" not in d:
+            d["entry_rate"] = 35
+        if "exit_rate" not in d:
+            d["exit_rate"] = 22
+        if "queue_length" not in d:
+            d["queue_length"] = 50
+
+        df = pd.DataFrame([d])
         df_engineered = self.engineer_features(df)
         feature_cols = self.get_feature_columns()
         

@@ -154,24 +154,34 @@ const CrowdMonitoring = () => {
   const [isConnectingYt, setIsConnectingYt] = useState(false);
   const [ytSuccessMsg, setYtSuccessMsg] = useState('');
 
+  const isFetchingRef = useRef(false);
+
   const fetchCCTVData = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     try {
-      const camsRes = await API.get('/cctv/cameras');
-      setCameras(camsRes.data || []);
-      
-      const targetCam = selectedCamId || (camsRes.data[0]?.camera_id || 'CAM-001');
-      const anaRes = await API.get(`/cctv/cameras/${targetCam}/analytics`);
-      setAnalytics(anaRes.data);
+      const targetCam = selectedCamId || 'CAM-001';
 
-      const predRes = await API.get(`/cctv/predictions?camera_id=${targetCam}`);
-      setPredictions(predRes.data);
+      // Parallelize all 4 telemetry requests in a single round-trip cycle
+      const [camsResult, anaResult, predResult, f4Result] = await Promise.allSettled([
+        API.get('/cctv/cameras'),
+        API.get(`/cctv/cameras/${targetCam}/analytics`),
+        API.get(`/cctv/predictions?camera_id=${targetCam}`),
+        API.get(`/cctv/yolo-opencv/analytics?camera_id=${targetCam}`)
+      ]);
 
-      // Fetch Frame 4 OpenCV+YOLO analytics
-      try {
-        const f4Res = await API.get(`/cctv/yolo-opencv/analytics?camera_id=${targetCam}`);
-        setFrame4Analytics(f4Res.data);
-      } catch (e) {
-        // Fallback gracefully if endpoint is warming up
+      if (camsResult.status === 'fulfilled') {
+        setCameras(camsResult.value.data || []);
+      }
+      if (anaResult.status === 'fulfilled') {
+        setAnalytics(anaResult.value.data);
+      }
+      if (predResult.status === 'fulfilled') {
+        setPredictions(predResult.value.data);
+      }
+      if (f4Result.status === 'fulfilled') {
+        setFrame4Analytics(f4Result.value.data);
       }
 
       setError(null);
@@ -179,13 +189,14 @@ const CrowdMonitoring = () => {
       console.error('Failed to load CCTV data:', err);
       setError('CCTV stream or analytics telemetry interrupted.');
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchCCTVData();
-    const interval = setInterval(fetchCCTVData, 5000);
+    const interval = setInterval(fetchCCTVData, 4000);
     return () => clearInterval(interval);
   }, [selectedCamId]);
 

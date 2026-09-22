@@ -115,13 +115,15 @@ def update_yolo_opencv_source(
     cctv_manager.set_yolo_counter_source(source_type, stream_url, camera_id)
     return {"status": "success", "source_type": source_type, "stream_url": stream_url}
 
+_last_measurement_logged = {}
+
 @router.get("/cameras/{camera_id}/analytics")
 def get_camera_analytics(
     camera_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Fetch current aggregated computer vision analytics for a specific camera."""
+    """Fetch current aggregated computer vision analytics for a specific camera (Zero DB-lock in-memory return)."""
     cam = cctv_manager.get_camera(camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -131,19 +133,26 @@ def get_camera_analytics(
 
     analytics = cam.get_analytics()
     
-    # Store measurement record in database
-    measurement = LiveCrowdMeasurement(
-        temple_id=cam.temple_id,
-        zone_code=cam.zone_code,
-        camera_id=cam.camera_id,
-        person_count=cam.person_count,
-        entry_rate=cam.entry_rate,
-        exit_rate=cam.exit_rate,
-        density_percent=cam.density_percent,
-        risk_level=cam.risk_level
-    )
-    db.add(measurement)
-    db.commit()
+    # Efficient periodic telemetry logging: write to DB at most once every 60s per camera
+    now = time.time()
+    last_log_time = _last_measurement_logged.get(camera_id, 0)
+    if now - last_log_time >= 60.0:
+        try:
+            measurement = LiveCrowdMeasurement(
+                temple_id=cam.temple_id,
+                zone_code=cam.zone_code,
+                camera_id=cam.camera_id,
+                person_count=cam.person_count,
+                entry_rate=cam.entry_rate,
+                exit_rate=cam.exit_rate,
+                density_percent=cam.density_percent,
+                risk_level=cam.risk_level
+            )
+            db.add(measurement)
+            db.commit()
+            _last_measurement_logged[camera_id] = now
+        except Exception:
+            db.rollback()
 
     return analytics
 

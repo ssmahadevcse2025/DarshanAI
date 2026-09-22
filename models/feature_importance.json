@@ -360,15 +360,19 @@
     },
     {
       "feature": "queue_length",
-      "importance": 0.0042
+      "importance": 0.0041
     },
     {
       "feature": "average_service_time",
-      "importance": 0.0017
+      "importance": 0.0018
     },
     {
       "feature": "day_of_week",
       "importance": 0.0008
+    },
+    {
+      "feature": "previous_hour_visitors",
+      "importance": 0.0005
     },
     {
       "feature": "entry_rate",
@@ -379,15 +383,7 @@
       "importance": 0.0004
     },
     {
-      "feature": "previous_hour_visitors",
-      "importance": 0.0003
-    },
-    {
       "feature": "number_of_open_gates",
-      "importance": 0.0003
-    },
-    {
-      "feature": "month_cos",
       "importance": 0.0003
     },
     {
@@ -400,6 +396,10 @@
     },
     {
       "feature": "previous_day_visitors",
+      "importance": 0.0001
+    },
+    {
+      "feature": "month_cos",
       "importance": 0.0001
     },
     {

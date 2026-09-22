@@ -69,9 +69,9 @@
     ]
   },
   "waiting_time_model": {
-    "MAE": 3.39,
-    "RMSE": 17.8,
-    "R2": 0.9839
+    "MAE": 3.38,
+    "RMSE": 17.62,
+    "R2": 0.9842
   },
   "anomaly_model": {
     "contamination": 0.03,
