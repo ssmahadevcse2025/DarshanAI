@@ -24,11 +24,13 @@ git push -u origin main
    - Connect your GitHub repository.
    - Environment: `Python 3`
    - Build Command: `pip install -r requirements.txt`
-   - Start Command: `gunicorn backend.main:app -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT`
+   - Start Command: `gunicorn backend.main:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT --threads 4 --max-requests 500 --max-requests-jitter 50`
    - Add Environment Variables:
      - `DATABASE_URL`: *(Your PostgreSQL URL from step 1)*
      - `SECRET_KEY`: *(Generate a secure random string)*
-     - `CORS_ORIGINS`: `https://<your-frontend-domain>.vercel.app`
+     - `PYTHONMALLOC`: `malloc`
+     - `MALLOC_TRIM_THRESHOLD_`: `100000`
+     - `CORS_ORIGINS`: `*` (or `https://<your-frontend-domain>.vercel.app`)
 3. Click **Deploy**. Note your backend URL (e.g. `https://darshanai-api.onrender.com`).
 
 ### Step 3: Deploy Frontend on Vercel
