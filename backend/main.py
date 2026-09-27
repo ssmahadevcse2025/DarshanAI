@@ -44,11 +44,28 @@ app.include_router(alerts.router, prefix=settings.API_V1_STR)
 app.include_router(pilgrims.router, prefix=settings.API_V1_STR)
 app.include_router(cctv.router, prefix=settings.API_V1_STR)
 
+import gc
+import asyncio
+import ctypes
+
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     # Create all DB tables
     Base.metadata.create_all(bind=engine)
     seed_database()
+    
+    # Start proactive memory trimmer to strictly prevent Render OOM restarts
+    async def memory_trimmer_loop():
+        while True:
+            await asyncio.sleep(30)
+            gc.collect()
+            try:
+                # Release freed memory pages back to Linux OS
+                libc = ctypes.CDLL("libc.so.6")
+                libc.malloc_trim(0)
+            except Exception:
+                pass
+    asyncio.create_task(memory_trimmer_loop())
 
 def seed_database():
     db: Session = SessionLocal()

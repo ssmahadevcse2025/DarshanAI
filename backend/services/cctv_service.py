@@ -48,43 +48,47 @@ class CameraStreamProcessor:
         self.last_frame_time = time.time()
         self.frame_count = 0
         self.simulated_people = []
+        self._width = 480
+        self._height = 360
+        self._frame_buffer = np.zeros((self._height, self._width, 3), dtype=np.uint8)
         self._init_synthetic_crowd()
 
     def _init_synthetic_crowd(self):
-        base_count = 24 if "queue" in self.zone_code else 16
+        base_count = 20 if "queue" in self.zone_code else 14
+        self.simulated_people = []
         for i in range(base_count):
             self.simulated_people.append({
                 "id": i + 101,
-                "x": float(np.random.randint(50, 580)),
-                "y": float(np.random.randint(80, 420)),
-                "vx": float(np.random.uniform(-1.5, 2.0)),
-                "vy": float(np.random.uniform(-0.8, 0.8)),
-                "h": float(np.random.randint(45, 75)),
-                "w": float(np.random.randint(22, 36)),
+                "x": float(np.random.randint(40, self._width - 60)),
+                "y": float(np.random.randint(60, self._height - 60)),
+                "vx": float(np.random.uniform(-1.2, 1.6)),
+                "vy": float(np.random.uniform(-0.6, 0.6)),
+                "h": float(np.random.randint(38, 58)),
+                "w": float(np.random.randint(18, 28)),
                 "color": (np.random.randint(180, 255), np.random.randint(120, 200), np.random.randint(50, 100))
             })
 
-    def generate_frame(self) -> np.ndarray:
-        width, height = 640, 480
-        frame = np.zeros((height, width, 3), dtype=np.uint8)
+    def generate_frame(self, overlay: bool = True) -> np.ndarray:
+        width, height = self._width, self._height
+        frame = self._frame_buffer
         frame[:, :] = (240, 246, 249) # Warm Ivory RGB in BGR
 
         # Floor grid lines & corridor barriers
-        cv2.line(frame, (0, 120), (width, 120), (200, 215, 225), 1)
-        cv2.line(frame, (0, 240), (width, 240), (200, 215, 225), 1)
-        cv2.line(frame, (0, 360), (width, 360), (200, 215, 225), 1)
+        cv2.line(frame, (0, 90), (width, 90), (200, 215, 225), 1)
+        cv2.line(frame, (0, 180), (width, 180), (200, 215, 225), 1)
+        cv2.line(frame, (0, 270), (width, 270), (200, 215, 225), 1)
 
         # Queue Corridor Guidelines
-        cv2.line(frame, (80, 60), (80, 440), (39, 155, 197), 2)
-        cv2.line(frame, (280, 60), (280, 440), (47, 29, 107), 2)
-        cv2.line(frame, (480, 60), (480, 440), (39, 155, 197), 2)
+        cv2.line(frame, (60, 45), (60, height - 35), (39, 155, 197), 2)
+        cv2.line(frame, (210, 45), (210, height - 35), (47, 29, 107), 2)
+        cv2.line(frame, (360, 45), (360, height - 35), (39, 155, 197), 2)
 
         # Entry & Exit virtual detection tripwires
-        cv2.line(frame, (10, 200), (200, 200), (0, 180, 0), 2)
-        cv2.putText(frame, "ENTRY TRIPWIRE", (15, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 140, 0), 1)
+        cv2.line(frame, (10, 150), (160, 150), (0, 180, 0), 2)
+        cv2.putText(frame, "ENTRY TRIPWIRE", (12, 142), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 140, 0), 1)
 
-        cv2.line(frame, (440, 320), (630, 320), (0, 0, 220), 2)
-        cv2.putText(frame, "EXIT TRIPWIRE", (450, 310), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 180), 1)
+        cv2.line(frame, (330, 240), (470, 240), (0, 0, 220), 2)
+        cv2.putText(frame, "EXIT TRIPWIRE", (335, 232), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 180), 1)
 
         # Move simulated people
         detected_boxes = []
@@ -92,21 +96,23 @@ class CameraStreamProcessor:
             p["x"] += p["vx"]
             p["y"] += p["vy"]
 
-            if p["x"] < 30 or p["x"] > width - 50:
+            if p["x"] < 20 or p["x"] > width - 40:
                 p["vx"] *= -1
-            if p["y"] < 60 or p["y"] > height - 80:
+            if p["y"] < 45 or p["y"] > height - 60:
                 p["vy"] *= -1
 
             x, y, w, h = int(p["x"]), int(p["y"]), int(p["w"]), int(p["h"])
             detected_boxes.append((x, y, w, h, p["id"]))
 
             # Draw person silhouette
-            cv2.circle(frame, (x + w // 2, y + 8), 7, p["color"], -1)
-            cv2.circle(frame, (x + w // 2, y + 8), 7, (47, 29, 107), 1)
-            cv2.rectangle(frame, (x + 2, y + 16), (x + w - 2, y + h), p["color"], -1)
-            box_color = (0, 180, 0) if self.risk_level == "LOW" else (0, 140, 255) if self.risk_level == "MODERATE" else (0, 0, 220)
-            cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
-            cv2.putText(frame, f"ID:{p['id']}", (x, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (47, 29, 107), 1)
+            cv2.circle(frame, (x + w // 2, y + 6), 5, p["color"], -1)
+            cv2.circle(frame, (x + w // 2, y + 6), 5, (47, 29, 107), 1)
+            cv2.rectangle(frame, (x + 2, y + 12), (x + w - 2, y + h), p["color"], -1)
+            
+            if overlay:
+                box_color = (0, 180, 0) if self.risk_level == "LOW" else (0, 140, 255) if self.risk_level == "MODERATE" else (0, 0, 220)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
+                cv2.putText(frame, f"ID:{p['id']}", (x, y - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (47, 29, 107), 1)
 
         self.person_count = len(detected_boxes)
         self.density_percent = min(100.0, round((self.person_count / max(1, self.capacity)) * 100, 1))
@@ -125,19 +131,20 @@ class CameraStreamProcessor:
         self.last_frame_time = now
         self.fps = round(1.0 / max(0.001, dt), 1)
 
-        # Draw HUD Overlays
-        cv2.rectangle(frame, (0, 0), (width, 42), (47, 29, 107), -1)
-        cv2.putText(frame, f"{self.camera_id} - {self.name.upper()}", (12, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (39, 155, 197), 1)
-        cv2.putText(frame, f"SOURCE: {self.source_type} | FPS: {self.fps} | 720p", (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
+        if overlay:
+            # Draw HUD Overlays
+            cv2.rectangle(frame, (0, 0), (width, 36), (47, 29, 107), -1)
+            cv2.putText(frame, f"{self.camera_id} - {self.name.upper()}", (10, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (39, 155, 197), 1)
+            cv2.putText(frame, f"SOURCE: {self.source_type} | FPS: {self.fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (220, 220, 220), 1)
 
-        cv2.circle(frame, (width - 65, 20), 5, (0, 220, 0), -1)
-        cv2.putText(frame, "LIVE", (width - 52, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 240, 0), 2)
+            cv2.circle(frame, (width - 55, 18), 4, (0, 220, 0), -1)
+            cv2.putText(frame, "LIVE", (width - 45, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 240, 0), 1)
 
-        cv2.rectangle(frame, (0, height - 36), (width, height), (30, 20, 15), -1)
-        risk_color = (0, 220, 0) if self.risk_level == "LOW" else (0, 160, 255) if self.risk_level == "MODERATE" else (0, 80, 255) if self.risk_level == "HIGH" else (0, 0, 255)
-        cv2.putText(frame, f"PERSON COUNT: {self.person_count}", (12, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(frame, f"DENSITY: {self.density_percent}%", (210, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(frame, f"RISK: {self.risk_level}", (410, height - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, risk_color, 2)
+            cv2.rectangle(frame, (0, height - 30), (width, height), (30, 20, 15), -1)
+            risk_color = (0, 220, 0) if self.risk_level == "LOW" else (0, 160, 255) if self.risk_level == "MODERATE" else (0, 80, 255) if self.risk_level == "HIGH" else (0, 0, 255)
+            cv2.putText(frame, f"COUNT: {self.person_count}", (10, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (255, 255, 255), 1)
+            cv2.putText(frame, f"DENSITY: {self.density_percent}%", (160, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (255, 255, 255), 1)
+            cv2.putText(frame, f"RISK: {self.risk_level}", (320, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.38, risk_color, 2)
 
         return frame
 
@@ -176,6 +183,9 @@ class YOLOPeopleCounterProcessor:
         self.last_frame_time = time.time()
         self.frame_index = 0
         self.simulated_boxes = []
+        self._width = 480
+        self._height = 360
+        self._frame_buffer = np.zeros((self._height, self._width, 3), dtype=np.uint8)
         self._init_simulation_boxes()
 
     def _init_simulation_boxes(self):
@@ -192,12 +202,12 @@ class YOLOPeopleCounterProcessor:
         for i in range(counts):
             self.simulated_boxes.append({
                 "id": i + 1,
-                "x": float(np.random.randint(40, 580)),
-                "y": float(np.random.randint(60, 410)),
+                "x": float(np.random.randint(40, self._width - 60)),
+                "y": float(np.random.randint(60, self._height - 70)),
                 "vx": float(np.random.uniform(-1.2, 1.5)),
                 "vy": float(np.random.uniform(-0.6, 0.6)),
-                "w": float(np.random.randint(24, 38)),
-                "h": float(np.random.randint(48, 72)),
+                "w": float(np.random.randint(20, 32)),
+                "h": float(np.random.randint(40, 60)),
                 "conf": round(float(np.random.uniform(0.78, 0.97)), 2)
             })
 
@@ -208,8 +218,8 @@ class YOLOPeopleCounterProcessor:
         self._init_simulation_boxes()
 
     def generate_yolo_opencv_frame(self) -> np.ndarray:
-        width, height = 640, 480
-        frame = np.zeros((height, width, 3), dtype=np.uint8)
+        width, height = self._width, self._height
+        frame = self._frame_buffer
         frame[:, :] = (238, 244, 248) # Clean ivory bg
 
         # Corridor dividers & Queue guidelines
