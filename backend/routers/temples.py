@@ -32,7 +32,7 @@ def get_temples(current_user: User = Depends(get_current_user), db: Session = De
 @router.post("", response_model=TempleResponse)
 def create_temple(
     payload: TempleCreate, 
-    current_user: User = Depends(require_role(["SUPER_ADMIN"])), 
+    current_user: User = Depends(require_role(["SUPER_ADMIN", "ADMIN", "TEMPLE_ADMIN", "MANAGER"])), 
     db: Session = Depends(get_db)
 ):
     existing = db.query(Temple).filter(Temple.temple_id == payload.temple_id).first()
@@ -43,6 +43,86 @@ def create_temple(
     db.add(temple)
     db.commit()
     db.refresh(temple)
+
+    # Auto-seed standard GIS operational zones around the new temple's GPS coordinates
+    lat, lng = temple.latitude, temple.longitude
+    zones = [
+        TempleZone(
+            temple_id=temple.temple_id, 
+            zone_code="main_entrance", 
+            name=f"{temple.name} Main Gate", 
+            zone_type="ENTRY", 
+            latitude=round(lat + 0.0008, 6), 
+            longitude=round(lng - 0.0007, 6), 
+            capacity=max(500, int(temple.capacity * 0.15)), 
+            is_verified=True, 
+            icon_type="DoorOpen", 
+            staff_assigned=8
+        ),
+        TempleZone(
+            temple_id=temple.temple_id, 
+            zone_code="registration", 
+            name="Yatri Token & Information Counters", 
+            zone_type="REGISTRATION", 
+            latitude=round(lat + 0.0005, 6), 
+            longitude=round(lng - 0.0004, 6), 
+            capacity=max(300, int(temple.capacity * 0.10)), 
+            is_verified=True, 
+            icon_type="Ticket", 
+            staff_assigned=6
+        ),
+        TempleZone(
+            temple_id=temple.temple_id, 
+            zone_code="queue_area", 
+            name="Main Darshan Queue Complex", 
+            zone_type="QUEUE", 
+            latitude=round(lat + 0.0002, 6), 
+            longitude=round(lng - 0.0002, 6), 
+            capacity=max(1000, int(temple.capacity * 0.30)), 
+            is_verified=True, 
+            icon_type="Users", 
+            staff_assigned=12
+        ),
+        TempleZone(
+            temple_id=temple.temple_id, 
+            zone_code="darshan_hall", 
+            name="Sanctum Sanctorum (Garbagriha)", 
+            zone_type="SANCTUM", 
+            latitude=round(lat, 6), 
+            longitude=round(lng, 6), 
+            capacity=max(500, int(temple.capacity * 0.15)), 
+            is_verified=True, 
+            icon_type="Flame", 
+            staff_assigned=10
+        ),
+        TempleZone(
+            temple_id=temple.temple_id, 
+            zone_code="prasadam_area", 
+            name="Prasadam & Bhojanalaya Hall", 
+            zone_type="PRASADAM", 
+            latitude=round(lat - 0.0005, 6), 
+            longitude=round(lng + 0.0003, 6), 
+            capacity=max(400, int(temple.capacity * 0.15)), 
+            is_verified=True, 
+            icon_type="Utensils", 
+            staff_assigned=6
+        ),
+        TempleZone(
+            temple_id=temple.temple_id, 
+            zone_code="exit_gates", 
+            name="Outer Exit Promenade", 
+            zone_type="EXIT", 
+            latitude=round(lat - 0.0006, 6), 
+            longitude=round(lng - 0.0004, 6), 
+            capacity=max(500, int(temple.capacity * 0.15)), 
+            is_verified=True, 
+            icon_type="LogOut", 
+            staff_assigned=6
+        ),
+    ]
+    db.add_all(zones)
+    db.commit()
+
     return temple
 
 _temple_map_cache = {}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import API from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import TempleMap from '../components/TempleMap';
@@ -16,7 +16,12 @@ import {
   RefreshCw, 
   CheckCircle, 
   AlertTriangle,
-  Sliders
+  Sliders,
+  Plus,
+  Search,
+  Crosshair,
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 
 const DEFAULT_MAP_DATA = {
@@ -145,6 +150,14 @@ const TempleMapPage = () => {
   const [selectedZone, setSelectedZone] = useState(DEFAULT_MAP_DATA.zones[0]);
   const [loading, setLoading] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showAddTempleModal, setShowAddTempleModal] = useState(false);
+  const [pinnedLocation, setPinnedLocation] = useState(null);
+
+  // Real Geocoding Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef(null);
 
   // Edit Location Form State
   const [editForm, setEditForm] = useState({
@@ -157,17 +170,42 @@ const TempleMapPage = () => {
   const [editSuccess, setEditSuccess] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
 
-  // Fetch list of temples for Super Admin
-  useEffect(() => {
-    if (user?.role === 'SUPER_ADMIN') {
-      API.get('/temples')
-        .then(res => {
-          if (Array.isArray(res.data) && res.data.length > 0) {
-            setAllTemples(res.data);
-          }
-        })
-        .catch(err => console.error(err));
+  // Add New Temple Form State
+  const [addForm, setAddForm] = useState({
+    temple_id: '',
+    name: '',
+    address: '',
+    city: '',
+    state: '',
+    country: 'India',
+    contact_number: '+91-9876543210',
+    email: '',
+    capacity: 20000,
+    opening_time: '04:00 AM',
+    closing_time: '10:00 PM',
+    status: 'ACTIVE',
+    latitude: 28.6139,
+    longitude: 77.2090,
+    zoom_level: 18
+  });
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
+  const [addingTemple, setAddingTemple] = useState(false);
+
+  // Fetch list of temples
+  const fetchTemplesList = async () => {
+    try {
+      const res = await API.get('/temples');
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setAllTemples(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching temples:', err);
     }
+  };
+
+  useEffect(() => {
+    fetchTemplesList();
   }, [user]);
 
   const fetchMapData = async (templeId, isInitial = false) => {
@@ -202,7 +240,83 @@ const TempleMapPage = () => {
 
   const handleTempleChange = (newTempleId) => {
     setSelectedTempleId(newTempleId);
+    setPinnedLocation(null);
     fetchMapData(newTempleId, true);
+  };
+
+  // Real Geocoding Search via OpenStreetMap Nominatim API
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!val.trim() || val.length < 3) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const query = encodeURIComponent(`${val} temple India`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=in&limit=6&addressdetails=1`);
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Nominatim Geocoding error:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+  };
+
+  const handleSelectSearchResult = (result) => {
+    const lat = parseFloat(result.lat);
+    const lon = parseFloat(result.lon);
+    
+    // Set pinned point for real map preview
+    setPinnedLocation({ lat, lng: lon, name: result.display_name });
+    
+    // Prepopulate Add Temple Modal if user wants to add it
+    const address = result.address || {};
+    const cityName = address.city || address.town || address.village || address.suburb || 'Central';
+    const stateName = address.state || 'India';
+    const shortName = result.display_name.split(',')[0] || searchQuery;
+
+    setAddForm(prev => ({
+      ...prev,
+      temple_id: `TEMPLE-${Math.floor(100 + Math.random() * 900)}`,
+      name: shortName,
+      address: result.display_name,
+      city: cityName,
+      state: stateName,
+      latitude: lat,
+      longitude: lon,
+      zoom_level: 18
+    }));
+
+    setSearchResults([]);
+    setSearchQuery(shortName);
+  };
+
+  const handleMapClick = (latlng) => {
+    setPinnedLocation({ lat: latlng.lat, lng: latlng.lng });
+    // Update active forms with clicked coordinates
+    setEditForm(prev => ({
+      ...prev,
+      latitude: parseFloat(latlng.lat.toFixed(5)),
+      longitude: parseFloat(latlng.lng.toFixed(5))
+    }));
+    setAddForm(prev => ({
+      ...prev,
+      latitude: parseFloat(latlng.lat.toFixed(5)),
+      longitude: parseFloat(latlng.lng.toFixed(5))
+    }));
   };
 
   const handleLocationSubmit = async (e) => {
@@ -243,6 +357,40 @@ const TempleMapPage = () => {
     }
   };
 
+  const handleCreateNewTemple = async (e) => {
+    e.preventDefault();
+    setAddError('');
+    setAddSuccess('');
+    setAddingTemple(true);
+
+    try {
+      const payload = {
+        ...addForm,
+        latitude: parseFloat(addForm.latitude),
+        longitude: parseFloat(addForm.longitude),
+        capacity: parseInt(addForm.capacity) || 15000,
+        zoom_level: parseInt(addForm.zoom_level) || 18
+      };
+
+      const res = await API.post('/temples', payload);
+      setAddSuccess(`Temple "${payload.name}" successfully created with auto-seeded GIS zones!`);
+      
+      await fetchTemplesList();
+      setSelectedTempleId(payload.temple_id);
+      fetchMapData(payload.temple_id, true);
+
+      setTimeout(() => {
+        setShowAddTempleModal(false);
+        setAddSuccess('');
+        setPinnedLocation(null);
+      }, 1500);
+    } catch (err) {
+      setAddError(err.response?.data?.detail || 'Failed to add temple map.');
+    } finally {
+      setAddingTemple(false);
+    }
+  };
+
   const temple = mapData?.temple || DEFAULT_MAP_DATA.temple;
   const zones = mapData?.zones || DEFAULT_MAP_DATA.zones;
 
@@ -254,19 +402,19 @@ const TempleMapPage = () => {
           <h4 className="fw-bold text-maroon m-0 d-flex align-items-center gap-2">
             <Map size={24} /> Geographically accurate temple GIS map
           </h4>
-          <small className="text-muted">Real-world spatial intelligence, verified GPS coordinates, and live crowd risk overlays</small>
+          <small className="text-muted">Real-world spatial intelligence, verified GPS satellite imagery, and live crowd risk overlays</small>
         </div>
 
         <div className="d-flex flex-wrap align-items-center gap-2">
-          {/* Super Admin Temple Selector */}
-          {user?.role === 'SUPER_ADMIN' && allTemples.length > 0 && (
-            <div className="d-flex align-items-center gap-1 bg-white p-1 rounded border border-beige">
+          {/* Temple Selector */}
+          {allTemples.length > 0 && (
+            <div className="d-flex align-items-center gap-1 bg-white p-1 rounded border border-beige shadow-sm">
               <Building size={16} className="text-maroon ms-1" />
               <select 
                 className="form-select form-select-sm border-0 fw-bold text-maroon"
                 value={selectedTempleId}
                 onChange={e => handleTempleChange(e.target.value)}
-                style={{ width: '220px' }}
+                style={{ width: '230px' }}
               >
                 {allTemples.map(t => (
                   <option key={t.temple_id} value={t.temple_id}>
@@ -277,7 +425,21 @@ const TempleMapPage = () => {
             </div>
           )}
 
-          {/* Mode & Risk Badges */}
+          {/* Add New Temple Map Button */}
+          <button 
+            onClick={() => {
+              setAddForm(prev => ({
+                ...prev,
+                temple_id: `TEMPLE-00${allTemples.length + 1}`
+              }));
+              setShowAddTempleModal(true);
+            }} 
+            className="btn btn-maroon text-gold fw-bold btn-sm d-flex align-items-center gap-1 shadow-sm"
+          >
+            <Plus size={15} /> Add Temple Map
+          </button>
+
+          {/* Mode Badge */}
           <span className={`badge ${mapData.mode === 'LIVE DATA' ? 'bg-success' : 'bg-warning text-dark'} px-2 py-2 fw-bold`}>
             {mapData.mode}
           </span>
@@ -285,17 +447,87 @@ const TempleMapPage = () => {
           <button 
             onClick={() => setShowLocationModal(true)} 
             className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+            title="Configure GPS coordinates"
           >
-            <Settings2 size={15} /> Configure location
+            <Settings2 size={15} /> Configure GPS
           </button>
 
           <button 
             onClick={() => fetchMapData(selectedTempleId)} 
             className="btn btn-outline-secondary btn-sm p-2"
+            title="Refresh map telemetry"
           >
             <RefreshCw size={15} />
           </button>
         </div>
+      </div>
+
+      {/* Real Geocoding Search Bar */}
+      <div className="position-relative mb-3">
+        <div className="input-group shadow-sm border border-gold rounded overflow-hidden">
+          <span className="input-group-text bg-white border-0 text-maroon">
+            <Search size={18} />
+          </span>
+          <input 
+            type="text" 
+            className="form-control border-0 py-2"
+            placeholder="Search any real temple, city, or shrine in India (e.g. Kedarnath, Puri Jagannath, Siddhivinayak, Golden Temple)..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+          />
+          {isSearching && (
+            <span className="input-group-text bg-white border-0 text-muted small">
+              Searching real map API...
+            </span>
+          )}
+        </div>
+
+        {/* Autocomplete Dropdown */}
+        {searchResults.length > 0 && (
+          <div 
+            className="position-absolute w-100 bg-white shadow-lg rounded border border-gold mt-1 p-2 overflow-auto" 
+            style={{ zIndex: 1100, maxHeight: '280px' }}
+          >
+            <small className="text-muted fw-bold d-block px-2 pb-1 border-bottom border-beige">
+              Real OpenStreetMap GPS Results (Click to preview or add to map):
+            </small>
+            {searchResults.map((item, idx) => (
+              <div 
+                key={idx}
+                className="p-2 rounded hover-bg-ivory cursor-pointer border-bottom border-light d-flex align-items-center justify-content-between"
+                style={{ cursor: 'pointer' }}
+                onClick={() => handleSelectSearchResult(item)}
+              >
+                <div>
+                  <strong className="text-maroon d-block" style={{ fontSize: '0.85rem' }}>
+                    <MapPin size={14} className="me-1 inline text-saffron" />
+                    {item.display_name.split(',')[0]}
+                  </strong>
+                  <small className="text-muted" style={{ fontSize: '0.74rem' }}>
+                    {item.display_name}
+                  </small>
+                </div>
+                <div className="text-end">
+                  <span className="badge bg-ivory text-dark-brown border border-beige" style={{ fontSize: '0.7rem' }}>
+                    {parseFloat(item.lat).toFixed(4)}° N, {parseFloat(item.lon).toFixed(4)}° E
+                  </span>
+                  <button 
+                    type="button" 
+                    className="btn btn-xs btn-outline-maroon ms-2 py-0 px-1"
+                    style={{ fontSize: '0.7rem' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectSearchResult(item);
+                      setShowAddTempleModal(true);
+                    }}
+                  >
+                    + Add Map
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* KPI Overview Bar */}
@@ -334,33 +566,59 @@ const TempleMapPage = () => {
 
       {/* Main Map & Zone Inspector Row */}
       <div className="row g-3">
-        {/* Left / Center: Interactive Leaflet Map */}
+        {/* Left / Center: Interactive Real Map APIs (Satellite, Voyager, OSM) */}
         <div className="col-lg-8">
           <div className="temple-card p-2" style={{ height: '560px' }}>
             <TempleMap
-              templeLat={temple.latitude}
-              templeLng={temple.longitude}
+              templeLat={pinnedLocation ? pinnedLocation.lat : temple.latitude}
+              templeLng={pinnedLocation ? pinnedLocation.lng : temple.longitude}
               zoomLevel={temple.zoom_level || 18}
-              templeName={temple.name}
+              templeName={pinnedLocation ? pinnedLocation.name || 'Searched Location' : temple.name}
               zones={zones}
               boundaryCoords={mapData.boundary_coordinates}
               selectedZoneId={selectedZone?.id}
               onSelectZone={(z) => setSelectedZone(z)}
+              onMapClick={handleMapClick}
+              pinnedPoint={pinnedLocation}
             />
           </div>
 
           {/* Quick Zone Navigator Buttons */}
-          <div className="d-flex flex-wrap gap-1 mt-2">
-            {zones.map(z => (
-              <button
-                key={z.id}
-                onClick={() => setSelectedZone(z)}
-                className={`btn btn-xs ${selectedZone?.id === z.id ? 'btn-maroon text-gold fw-bold' : 'btn-outline-secondary'}`}
-                style={{ fontSize: '0.72rem' }}
-              >
-                {z.name}
-              </button>
-            ))}
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-1 mt-2">
+            <div className="d-flex flex-wrap gap-1">
+              {zones.map(z => (
+                <button
+                  key={z.id}
+                  onClick={() => setSelectedZone(z)}
+                  className={`btn btn-xs ${selectedZone?.id === z.id ? 'btn-maroon text-gold fw-bold' : 'btn-outline-secondary'}`}
+                  style={{ fontSize: '0.72rem' }}
+                >
+                  {z.name}
+                </button>
+              ))}
+            </div>
+
+            {pinnedLocation && (
+              <div className="d-flex align-items-center gap-1">
+                <span className="badge bg-warning text-dark small" style={{ fontSize: '0.72rem' }}>
+                  Pinned: {pinnedLocation.lat.toFixed(4)}, {pinnedLocation.lng.toFixed(4)}
+                </span>
+                <button 
+                  onClick={() => setShowAddTempleModal(true)} 
+                  className="btn btn-xs btn-maroon text-gold fw-bold"
+                  style={{ fontSize: '0.72rem' }}
+                >
+                  + Add Map Here
+                </button>
+                <button 
+                  onClick={() => setPinnedLocation(null)} 
+                  className="btn btn-xs btn-outline-secondary"
+                  style={{ fontSize: '0.72rem' }}
+                >
+                  Clear Pin
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -461,6 +719,156 @@ const TempleMapPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal: Add New Temple Map */}
+      {showAddTempleModal && (
+        <div className="modal d-block bg-dark bg-opacity-50" tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content temple-card border-gold">
+              <div className="modal-header border-beige">
+                <h5 className="modal-title text-maroon fw-bold d-flex align-items-center gap-2">
+                  <Plus size={20} /> Add New Real Temple Map
+                </h5>
+                <button type="button" className="btn-close" onClick={() => setShowAddTempleModal(false)}></button>
+              </div>
+              <form onSubmit={handleCreateNewTemple}>
+                <div className="modal-body">
+                  <p className="text-muted small mb-3">
+                    Onboard a new temple with verified GPS coordinates. Standard GIS operational zones (Main Entrance, Queue Complex, Sanctum, Prasadam, Exits) will be automatically generated.
+                  </p>
+
+                  {addError && <div className="alert alert-danger py-2 small">{addError}</div>}
+                  {addSuccess && <div className="alert alert-success py-2 small">{addSuccess}</div>}
+
+                  <div className="row g-3">
+                    <div className="col-md-4">
+                      <label className="form-label text-dark-brown small fw-bold">Temple Identifier ID</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        required 
+                        placeholder="e.g. TEMPLE-006"
+                        value={addForm.temple_id}
+                        onChange={e => setAddForm({ ...addForm, temple_id: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-8">
+                      <label className="form-label text-dark-brown small fw-bold">Temple Full Name</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        required 
+                        placeholder="e.g. Shri Kedarnath Jyotirlinga Temple"
+                        value={addForm.name}
+                        onChange={e => setAddForm({ ...addForm, name: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label text-dark-brown small fw-bold">City / Town</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        required 
+                        placeholder="e.g. Rudraprayag"
+                        value={addForm.city}
+                        onChange={e => setAddForm({ ...addForm, city: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label text-dark-brown small fw-bold">State / Province</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        required 
+                        placeholder="e.g. Uttarakhand"
+                        value={addForm.state}
+                        onChange={e => setAddForm({ ...addForm, state: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label text-dark-brown small fw-bold">GPS Latitude</label>
+                      <input 
+                        type="number" 
+                        step="any"
+                        className="form-control" 
+                        required 
+                        value={addForm.latitude}
+                        onChange={e => setAddForm({ ...addForm, latitude: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label text-dark-brown small fw-bold">GPS Longitude</label>
+                      <input 
+                        type="number" 
+                        step="any"
+                        className="form-control" 
+                        required 
+                        value={addForm.longitude}
+                        onChange={e => setAddForm({ ...addForm, longitude: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label text-dark-brown small fw-bold">Max Crowd Capacity</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        required 
+                        value={addForm.capacity}
+                        onChange={e => setAddForm({ ...addForm, capacity: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label text-dark-brown small fw-bold">Address / Landmark</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={addForm.address}
+                        onChange={e => setAddForm({ ...addForm, address: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label text-dark-brown small fw-bold">Opening Time</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={addForm.opening_time}
+                        onChange={e => setAddForm({ ...addForm, opening_time: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label text-dark-brown small fw-bold">Closing Time</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={addForm.closing_time}
+                        onChange={e => setAddForm({ ...addForm, closing_time: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer border-beige">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setShowAddTempleModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-maroon text-gold fw-bold" disabled={addingTemple}>
+                    {addingTemple ? 'Creating Map & Zones...' : 'Create & Plop On Real Map'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Temple Location Modal */}
       {showLocationModal && (
