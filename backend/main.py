@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
@@ -369,7 +369,11 @@ def seed_database():
         db.close()
 
 @app.get("/")
-def read_root():
+def read_root(request: Request):
+    if "text/html" in request.headers.get("accept", ""):
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
     return {
         "title": settings.PROJECT_NAME,
         "version": settings.VERSION,
@@ -405,3 +409,23 @@ def get_memory_diagnostics():
         "memory_utilization_pct": round((rss_mb / 512.0) * 100, 1) if rss_mb > 0 else "N/A",
         "gc_collected": True
     }
+
+# Mount static files for production React SPA if frontend/dist exists
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+if os.path.exists(frontend_dist):
+    from fastapi.staticfiles import StaticFiles
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="static_assets")
+
+    @app.exception_handler(404)
+    async def custom_404_handler(request, exc):
+        # If API route not found, return JSON 404
+        if request.url.path.startswith("/api"):
+            return FileResponse(os.path.join(frontend_dist, "index.html"))
+        # Otherwise serve index.html for client-side React routing (SPA fallback)
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise exc
