@@ -29,6 +29,10 @@ services:
         value: "*"
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: PYTHONMALLOC
+        value: "malloc"
+      - key: MALLOC_TRIM_THRESHOLD_
+        value: "100000"
 
   # React Vite Frontend
   - type: web

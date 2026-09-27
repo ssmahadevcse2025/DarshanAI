@@ -2,7 +2,6 @@ import os
 import time
 import math
 import random
-import joblib
 import numpy as np
 
 class TempleSimulationEngine:
@@ -15,15 +14,6 @@ class TempleSimulationEngine:
         self.simulated_hour = 8
         self.simulated_minute = 0
         self.tick_count = 0
-        
-        # Load ML models
-        self.preprocessor = None
-        self.crowd_regressor = None
-        self.crowd_classifier = None
-        self.risk_classifier = None
-        self.waiting_time_model = None
-        self.anomaly_detector = None
-        self._load_models()
         
         # Base operational state
         self.visitor_count = 4200
@@ -40,20 +30,6 @@ class TempleSimulationEngine:
         
         # Initial zones
         self.zones = self._initialize_zones()
-
-    def _load_models(self):
-        models_dir = "models"
-        try:
-            self.preprocessor = joblib.load(os.path.join(models_dir, "preprocessing_pipeline.pkl"))
-            self.crowd_regressor = joblib.load(os.path.join(models_dir, "crowd_regressor.pkl"))
-            self.crowd_classifier = joblib.load(os.path.join(models_dir, "crowd_classifier.pkl"))
-            self.risk_classifier = joblib.load(os.path.join(models_dir, "risk_classifier.pkl"))
-            self.waiting_time_model = joblib.load(os.path.join(models_dir, "waiting_time_model.pkl"))
-            self.anomaly_detector = joblib.load(os.path.join(models_dir, "anomaly_model.pkl"))
-            self.models_available = True
-        except Exception as e:
-            print(f"[SIMULATION WARNING] Could not load ML models: {e}")
-            self.models_available = False
 
     def _initialize_zones(self):
         return {
@@ -203,23 +179,17 @@ class TempleSimulationEngine:
             "average_service_time": self.avg_service_time
         }
 
-        # Run ML Inference
-        if self.models_available and self.preprocessor is not None:
-            try:
-                X_scaled = self.preprocessor.transform_single(payload)
-                pred_visitors = int(self.crowd_regressor.predict(X_scaled)[0])
-                pred_crowd_level = str(self.crowd_classifier.predict(X_scaled)[0])
-                pred_risk_level = str(self.risk_classifier.predict(X_scaled)[0])
-                pred_waiting_time = round(float(self.waiting_time_model.predict(X_scaled)[0]), 1)
-                is_anomaly, anomaly_score = self.anomaly_detector.predict_anomaly(X_scaled)
-            except Exception as e:
-                print(f"[ML INFERENCE ERROR] {e}")
-                pred_visitors = int(self.visitor_count * 1.1)
-                pred_crowd_level = "HIGH" if self.visitor_count > 7000 else "MODERATE"
-                pred_risk_level = "HIGH" if self.queue_length > 1500 else "MEDIUM"
-                pred_waiting_time = round(self.queue_length / 40.0, 1)
-                is_anomaly, anomaly_score = False, 0.12
-        else:
+        # Run ML Inference via shared singleton ml_service
+        try:
+            from backend.services.ml_service import ml_service
+            ml_res = ml_service.predict(payload)
+            pred_visitors = ml_res.get("predicted_visitor_count", int(self.visitor_count * 1.1))
+            pred_crowd_level = ml_res.get("predicted_crowd_level", "MODERATE")
+            pred_risk_level = ml_res.get("predicted_risk_level", "MEDIUM")
+            pred_waiting_time = ml_res.get("predicted_waiting_time", round(self.queue_length / 40.0, 1))
+            is_anomaly = ml_res.get("is_anomaly", False)
+            anomaly_score = ml_res.get("anomaly_score", 0.12)
+        except Exception as e:
             pred_visitors = int(self.visitor_count * 1.1)
             pred_crowd_level = "HIGH" if self.visitor_count > 7000 else "MODERATE"
             pred_risk_level = "HIGH" if self.queue_length > 1500 else "MEDIUM"

@@ -22,12 +22,15 @@ COPY backend/ ./backend/
 COPY ml/ ./ml/
 COPY models/ ./models/
 
-# Default environment variables
+# Default environment variables for low-memory footprint
 ENV HOST=0.0.0.0
 ENV PORT=8000
-ENV WORKERS=2
+ENV WORKERS=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONMALLOC=malloc
+ENV MALLOC_TRIM_THRESHOLD_=100000
 
 EXPOSE 8000
 
-# Run with Gunicorn Uvicorn workers in production
-CMD ["gunicorn", "backend.main:app", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
+# Run with single Gunicorn Uvicorn worker and threads in memory-constrained environments
+CMD ["gunicorn", "backend.main:app", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "--threads", "4", "--max-requests", "500", "--max-requests-jitter", "50"]

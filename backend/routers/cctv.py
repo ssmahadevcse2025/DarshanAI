@@ -28,18 +28,25 @@ def _generate_mjpeg_stream(camera_id: str, overlay: bool = True):
     cam = cctv_manager.get_camera(camera_id)
     if not cam:
         return
-    while True:
-        frame = cam.generate_frame(overlay=overlay)
-        if frame is None:
-            time.sleep(0.05)
-            continue
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        if not ret:
-            continue
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        time.sleep(0.05)  # ~20 FPS transmission
+    try:
+        while True:
+            frame = cam.generate_frame(overlay=overlay)
+            if frame is None:
+                time.sleep(0.05)
+                continue
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            if not ret:
+                continue
+            frame_bytes = buffer.tobytes()
+            del buffer
+            del frame
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            time.sleep(0.06)  # ~16 FPS transmission (low CPU/RAM usage)
+    except GeneratorExit:
+        pass
+    except Exception:
+        pass
 
 @router.get("/cameras/{camera_id}/stream")
 def stream_camera(camera_id: str, mode: str = Query("detection", pattern="^(detection|raw)$")):
@@ -79,18 +86,25 @@ def _generate_yolo_opencv_stream(camera_id: str = "CAM-001"):
     counter = cctv_manager.get_yolo_counter()
     if camera_id and counter.linked_camera_id != camera_id:
         counter.linked_camera_id = camera_id
-    while True:
-        frame = counter.generate_yolo_opencv_frame()
-        if frame is None:
-            time.sleep(0.05)
-            continue
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        if not ret:
-            continue
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        time.sleep(0.045)  # ~22 FPS transmission
+    try:
+        while True:
+            frame = counter.generate_yolo_opencv_frame()
+            if frame is None:
+                time.sleep(0.05)
+                continue
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            if not ret:
+                continue
+            frame_bytes = buffer.tobytes()
+            del buffer
+            del frame
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            time.sleep(0.06)  # ~16 FPS transmission
+    except GeneratorExit:
+        pass
+    except Exception:
+        pass
 
 @router.get("/yolo-opencv-stream")
 def yolo_opencv_stream(camera_id: str = Query("CAM-001")):

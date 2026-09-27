@@ -2,106 +2,106 @@
   "crowd_regressor": [
     {
       "feature": "entry_rate",
-      "importance": 0.8988
+      "importance": 0.9169
     },
     {
       "feature": "exit_rate",
-      "importance": 0.0718
+      "importance": 0.0604
     },
     {
       "feature": "queue_length",
-      "importance": 0.0137
-    },
-    {
-      "feature": "previous_hour_visitors",
-      "importance": 0.0033
+      "importance": 0.0141
     },
     {
       "feature": "number_of_open_gates",
-      "importance": 0.0032
+      "importance": 0.0034
+    },
+    {
+      "feature": "previous_hour_visitors",
+      "importance": 0.0015
     },
     {
       "feature": "staff_available",
-      "importance": 0.002
-    },
-    {
-      "feature": "hour_cos",
-      "importance": 0.0016
+      "importance": 0.0015
     },
     {
       "feature": "day_of_week",
-      "importance": 0.0007
-    },
-    {
-      "feature": "hour",
       "importance": 0.0006
     },
     {
       "feature": "is_weekend",
-      "importance": 0.0006
-    },
-    {
-      "feature": "entry_per_staff",
-      "importance": 0.0006
-    },
-    {
-      "feature": "queue_per_gate",
       "importance": 0.0005
     },
     {
-      "feature": "average_service_time",
-      "importance": 0.0004
-    },
-    {
-      "feature": "hour_sin",
-      "importance": 0.0004
-    },
-    {
-      "feature": "net_flow_rate",
-      "importance": 0.0004
-    },
-    {
-      "feature": "temperature",
-      "importance": 0.0003
-    },
-    {
-      "feature": "previous_day_visitors",
-      "importance": 0.0003
-    },
-    {
       "feature": "is_festival",
+      "importance": 0.0003
+    },
+    {
+      "feature": "hour_cos",
+      "importance": 0.0003
+    },
+    {
+      "feature": "hour",
       "importance": 0.0002
     },
     {
-      "feature": "month",
+      "feature": "entry_per_staff",
+      "importance": 0.0002
+    },
+    {
+      "feature": "queue_per_gate",
       "importance": 0.0001
+    },
+    {
+      "feature": "month",
+      "importance": 0.0
     },
     {
       "feature": "is_holiday",
-      "importance": 0.0001
+      "importance": 0.0
     },
     {
       "feature": "special_event",
-      "importance": 0.0001
+      "importance": 0.0
+    },
+    {
+      "feature": "temperature",
+      "importance": 0.0
     },
     {
       "feature": "rainfall",
-      "importance": 0.0001
+      "importance": 0.0
+    },
+    {
+      "feature": "previous_day_visitors",
+      "importance": 0.0
+    },
+    {
+      "feature": "average_service_time",
+      "importance": 0.0
+    },
+    {
+      "feature": "hour_sin",
+      "importance": 0.0
     },
     {
       "feature": "month_sin",
-      "importance": 0.0001
+      "importance": 0.0
     },
     {
       "feature": "month_cos",
-      "importance": 0.0001
+      "importance": 0.0
     },
     {
-      "feature": "weather_Cloudy",
-      "importance": 0.0001
+      "feature": "net_flow_rate",
+      "importance": 0.0
     },
     {
       "feature": "weather_Clear",
+      "importance": 0.0
+    },
+    {
+      "feature": "weather_Cloudy",
       "importance": 0.0
     },
     {
@@ -119,116 +119,116 @@
   ],
   "crowd_classifier": [
     {
-      "feature": "entry_rate",
-      "importance": 0.2334
-    },
-    {
-      "feature": "exit_rate",
-      "importance": 0.1865
-    },
-    {
       "feature": "queue_length",
-      "importance": 0.1363
+      "importance": 0.2421
+    },
+    {
+      "feature": "entry_rate",
+      "importance": 0.2417
     },
     {
       "feature": "entry_per_staff",
-      "importance": 0.1259
+      "importance": 0.134
+    },
+    {
+      "feature": "exit_rate",
+      "importance": 0.1242
     },
     {
       "feature": "queue_per_gate",
-      "importance": 0.0813
+      "importance": 0.0976
     },
     {
       "feature": "previous_hour_visitors",
-      "importance": 0.0788
-    },
-    {
-      "feature": "hour_sin",
-      "importance": 0.0322
+      "importance": 0.0753
     },
     {
       "feature": "hour_cos",
-      "importance": 0.0228
+      "importance": 0.0196
     },
     {
-      "feature": "net_flow_rate",
-      "importance": 0.0223
-    },
-    {
-      "feature": "hour",
-      "importance": 0.0162
+      "feature": "hour_sin",
+      "importance": 0.0165
     },
     {
       "feature": "number_of_open_gates",
-      "importance": 0.0099
-    },
-    {
-      "feature": "staff_available",
-      "importance": 0.0093
-    },
-    {
-      "feature": "temperature",
-      "importance": 0.0059
-    },
-    {
-      "feature": "average_service_time",
-      "importance": 0.0059
+      "importance": 0.0101
     },
     {
       "feature": "special_event",
-      "importance": 0.0051
+      "importance": 0.0085
     },
     {
-      "feature": "previous_day_visitors",
-      "importance": 0.0051
+      "feature": "hour",
+      "importance": 0.0074
+    },
+    {
+      "feature": "net_flow_rate",
+      "importance": 0.0059
+    },
+    {
+      "feature": "staff_available",
+      "importance": 0.0045
+    },
+    {
+      "feature": "temperature",
+      "importance": 0.0031
     },
     {
       "feature": "day_of_week",
-      "importance": 0.0048
+      "importance": 0.0018
     },
     {
       "feature": "is_festival",
-      "importance": 0.0028
+      "importance": 0.0017
     },
     {
-      "feature": "month",
-      "importance": 0.0025
+      "feature": "average_service_time",
+      "importance": 0.0013
     },
     {
       "feature": "rainfall",
-      "importance": 0.0023
-    },
-    {
-      "feature": "month_sin",
-      "importance": 0.0023
-    },
-    {
-      "feature": "month_cos",
-      "importance": 0.0022
-    },
-    {
-      "feature": "is_weekend",
-      "importance": 0.0015
-    },
-    {
-      "feature": "is_holiday",
-      "importance": 0.0015
-    },
-    {
-      "feature": "weather_Heavy Rain",
       "importance": 0.0012
     },
     {
-      "feature": "weather_Clear",
+      "feature": "is_weekend",
       "importance": 0.0009
     },
     {
-      "feature": "weather_Cloudy",
+      "feature": "month",
       "importance": 0.0007
     },
     {
-      "feature": "weather_Light Rain",
+      "feature": "is_holiday",
+      "importance": 0.0006
+    },
+    {
+      "feature": "previous_day_visitors",
       "importance": 0.0005
+    },
+    {
+      "feature": "month_cos",
+      "importance": 0.0004
+    },
+    {
+      "feature": "month_sin",
+      "importance": 0.0002
+    },
+    {
+      "feature": "weather_Cloudy",
+      "importance": 0.0001
+    },
+    {
+      "feature": "weather_Light Rain",
+      "importance": 0.0001
+    },
+    {
+      "feature": "weather_Heavy Rain",
+      "importance": 0.0001
+    },
+    {
+      "feature": "weather_Clear",
+      "importance": 0.0
     },
     {
       "feature": "is_major_festival",
@@ -238,115 +238,115 @@
   "risk_classifier": [
     {
       "feature": "queue_per_gate",
-      "importance": 0.3229
+      "importance": 0.3159
     },
     {
       "feature": "queue_length",
-      "importance": 0.2088
+      "importance": 0.2777
     },
     {
       "feature": "entry_rate",
-      "importance": 0.1086
+      "importance": 0.1176
     },
     {
       "feature": "entry_per_staff",
-      "importance": 0.0791
+      "importance": 0.0887
     },
     {
       "feature": "exit_rate",
-      "importance": 0.0787
-    },
-    {
-      "feature": "number_of_open_gates",
-      "importance": 0.0544
+      "importance": 0.0587
     },
     {
       "feature": "previous_hour_visitors",
-      "importance": 0.0506
+      "importance": 0.0573
+    },
+    {
+      "feature": "number_of_open_gates",
+      "importance": 0.0376
     },
     {
       "feature": "hour_cos",
-      "importance": 0.0135
-    },
-    {
-      "feature": "hour",
-      "importance": 0.0126
-    },
-    {
-      "feature": "hour_sin",
-      "importance": 0.0126
-    },
-    {
-      "feature": "net_flow_rate",
       "importance": 0.0103
     },
     {
-      "feature": "temperature",
-      "importance": 0.0065
-    },
-    {
-      "feature": "average_service_time",
-      "importance": 0.0059
-    },
-    {
-      "feature": "staff_available",
-      "importance": 0.0054
-    },
-    {
-      "feature": "previous_day_visitors",
-      "importance": 0.0051
+      "feature": "hour_sin",
+      "importance": 0.0087
     },
     {
       "feature": "special_event",
-      "importance": 0.0044
+      "importance": 0.0071
+    },
+    {
+      "feature": "net_flow_rate",
+      "importance": 0.0065
+    },
+    {
+      "feature": "hour",
+      "importance": 0.0042
+    },
+    {
+      "feature": "temperature",
+      "importance": 0.0026
+    },
+    {
+      "feature": "staff_available",
+      "importance": 0.0017
     },
     {
       "feature": "day_of_week",
-      "importance": 0.004
+      "importance": 0.0016
     },
     {
       "feature": "is_weekend",
-      "importance": 0.0028
-    },
-    {
-      "feature": "month",
-      "importance": 0.0024
-    },
-    {
-      "feature": "rainfall",
-      "importance": 0.0024
-    },
-    {
-      "feature": "month_sin",
-      "importance": 0.0023
-    },
-    {
-      "feature": "month_cos",
-      "importance": 0.0022
-    },
-    {
-      "feature": "is_holiday",
-      "importance": 0.0012
-    },
-    {
-      "feature": "is_festival",
       "importance": 0.0009
     },
     {
-      "feature": "weather_Clear",
+      "feature": "is_holiday",
       "importance": 0.0007
     },
     {
-      "feature": "weather_Cloudy",
-      "importance": 0.0007
+      "feature": "is_festival",
+      "importance": 0.0005
     },
     {
-      "feature": "weather_Heavy Rain",
-      "importance": 0.0007
+      "feature": "previous_day_visitors",
+      "importance": 0.0005
+    },
+    {
+      "feature": "rainfall",
+      "importance": 0.0004
+    },
+    {
+      "feature": "average_service_time",
+      "importance": 0.0004
+    },
+    {
+      "feature": "month",
+      "importance": 0.0002
+    },
+    {
+      "feature": "month_sin",
+      "importance": 0.0001
     },
     {
       "feature": "weather_Light Rain",
-      "importance": 0.0004
+      "importance": 0.0001
+    },
+    {
+      "feature": "weather_Heavy Rain",
+      "importance": 0.0001
+    },
+    {
+      "feature": "month_cos",
+      "importance": 0.0
+    },
+    {
+      "feature": "weather_Clear",
+      "importance": 0.0
+    },
+    {
+      "feature": "weather_Cloudy",
+      "importance": 0.0
     },
     {
       "feature": "is_major_festival",
@@ -356,50 +356,46 @@
   "waiting_time_model": [
     {
       "feature": "queue_per_gate",
-      "importance": 0.9909
+      "importance": 0.9912
     },
     {
       "feature": "queue_length",
-      "importance": 0.0041
-    },
-    {
-      "feature": "average_service_time",
-      "importance": 0.0018
-    },
-    {
-      "feature": "day_of_week",
-      "importance": 0.0008
-    },
-    {
-      "feature": "previous_hour_visitors",
-      "importance": 0.0005
-    },
-    {
-      "feature": "entry_rate",
-      "importance": 0.0004
-    },
-    {
-      "feature": "exit_rate",
-      "importance": 0.0004
-    },
-    {
-      "feature": "number_of_open_gates",
-      "importance": 0.0003
-    },
-    {
-      "feature": "temperature",
-      "importance": 0.0002
-    },
-    {
-      "feature": "hour_cos",
-      "importance": 0.0002
-    },
-    {
-      "feature": "previous_day_visitors",
-      "importance": 0.0001
+      "importance": 0.0043
     },
     {
       "feature": "month_cos",
+      "importance": 0.0013
+    },
+    {
+      "feature": "average_service_time",
+      "importance": 0.0009
+    },
+    {
+      "feature": "number_of_open_gates",
+      "importance": 0.0007
+    },
+    {
+      "feature": "temperature",
+      "importance": 0.0004
+    },
+    {
+      "feature": "previous_hour_visitors",
+      "importance": 0.0003
+    },
+    {
+      "feature": "entry_rate",
+      "importance": 0.0002
+    },
+    {
+      "feature": "net_flow_rate",
+      "importance": 0.0002
+    },
+    {
+      "feature": "exit_rate",
+      "importance": 0.0001
+    },
+    {
+      "feature": "staff_available",
       "importance": 0.0001
     },
     {
@@ -408,6 +404,10 @@
     },
     {
       "feature": "hour",
+      "importance": 0.0
+    },
+    {
+      "feature": "day_of_week",
       "importance": 0.0
     },
     {
@@ -435,7 +435,7 @@
       "importance": 0.0
     },
     {
-      "feature": "staff_available",
+      "feature": "previous_day_visitors",
       "importance": 0.0
     },
     {
@@ -443,11 +443,11 @@
       "importance": 0.0
     },
     {
-      "feature": "month_sin",
+      "feature": "hour_cos",
       "importance": 0.0
     },
     {
-      "feature": "net_flow_rate",
+      "feature": "month_sin",
       "importance": 0.0
     },
     {

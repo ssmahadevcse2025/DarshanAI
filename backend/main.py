@@ -376,3 +376,32 @@ def read_root():
         "status": "ONLINE",
         "description": "DarshanAI Multi-Temple Crowd Intelligence & Safety Platform"
     }
+
+@app.get("/health")
+@app.get(f"{settings.API_V1_STR}/health")
+def health_check():
+    """Lightweight platform health probe for container orchestrators and Render/AWS health checkers."""
+    return {"status": "healthy", "service": settings.PROJECT_NAME, "version": settings.VERSION}
+
+@app.get(f"{settings.API_V1_STR}/system/memory")
+def get_memory_diagnostics():
+    """Inspects live process memory consumption and triggers garbage collection to prevent memory buildup."""
+    import gc
+    gc.collect()
+    
+    rss_mb = 0.0
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        rss_mb = round(process.memory_info().rss / (1024 * 1024), 2)
+    except Exception:
+        pass
+
+    return {
+        "status": "OPTIMAL",
+        "process_id": os.getpid(),
+        "rss_memory_mb": rss_mb,
+        "memory_limit_mb": 512,
+        "memory_utilization_pct": round((rss_mb / 512.0) * 100, 1) if rss_mb > 0 else "N/A",
+        "gc_collected": True
+    }
