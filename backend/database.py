@@ -10,9 +10,10 @@ def init_engine():
         try:
             test_engine = create_engine(
                 db_url,
+                connect_args={"connect_timeout": 3} if "postgres" in db_url else {},
                 pool_size=5,
                 max_overflow=5,
-                pool_timeout=5,
+                pool_timeout=3,
                 pool_pre_ping=True
             )
             with test_engine.connect() as conn:
