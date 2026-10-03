@@ -92,7 +92,23 @@ def register_user(payload: RegisterUserRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = authenticate_user(db, email=payload.email, password=payload.password, temple_id=payload.temple_id)
+    try:
+        user = authenticate_user(db, email=payload.email, password=payload.password, temple_id=payload.temple_id)
+    except Exception as e:
+        print(f"[AUTH LOGIN ERROR] {e}")
+        try:
+            from backend.main import seed_database
+            from backend.database import Base, engine
+            Base.metadata.create_all(bind=engine)
+            seed_database()
+            user = authenticate_user(db, email=payload.email, password=payload.password, temple_id=payload.temple_id)
+        except Exception as retry_err:
+            print(f"[AUTH RETRY ERROR] {retry_err}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database authentication error: {str(e)}"
+            )
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

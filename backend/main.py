@@ -432,6 +432,30 @@ def get_memory_diagnostics():
         "gc_collected": True
     }
 
+@app.get(f"{settings.API_V1_STR}/system/db-status")
+def get_db_status():
+    """Diagnostic endpoint to inspect live database connection, tables, and seeded accounts."""
+    status_info = {"status": "ONLINE", "database_type": "PostgreSQL" if "postgres" in settings.DATABASE_URL else "SQLite"}
+    try:
+        db = SessionLocal()
+        user_count = db.query(User).count()
+        temple_count = db.query(Temple).count()
+        status_info["user_count"] = user_count
+        status_info["temple_count"] = temple_count
+        status_info["initialized"] = user_count > 0 and temple_count > 0
+        db.close()
+    except Exception as e:
+        status_info["status"] = "INITIALIZING"
+        status_info["error"] = str(e)
+        try:
+            Base.metadata.create_all(bind=engine)
+            seed_database()
+            status_info["status"] = "AUTO_INITIALIZED"
+        except Exception as init_err:
+            status_info["init_error"] = str(init_err)
+
+    return status_info
+
 # Mount static files for production React SPA if frontend/dist exists
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
 if os.path.exists(frontend_dist):
