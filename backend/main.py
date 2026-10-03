@@ -25,13 +25,15 @@ app = FastAPI(
 # Enable GZIP compression for fast payload transfers (>1KB)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Configure CORS
+# Configure CORS (Supports Localhost, Vercel, Render, and Custom Domains)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https?:\/\/.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Include Routers
