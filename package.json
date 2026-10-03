@@ -9,6 +9,6 @@
     "dev": "npm --prefix frontend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "python backend/main.py",
-    "build": "npm --prefix frontend run build"
+    "build": "npm --prefix frontend install && npm --prefix frontend run build"
   }
 }
