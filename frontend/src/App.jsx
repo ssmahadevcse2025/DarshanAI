@@ -1,6 +1,7 @@
 import React, { useContext, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, AuthProvider } from './context/AuthContext';
+import { SidebarProvider } from './context/SidebarContext';
 
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -181,9 +182,11 @@ const App = () => {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
-          <AppRoutes />
-        </Router>
+        <SidebarProvider>
+          <Router>
+            <AppRoutes />
+          </Router>
+        </SidebarProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
