@@ -32,5 +32,5 @@ ENV MALLOC_TRIM_THRESHOLD_=100000
 
 EXPOSE 8000
 
-# Run with single Gunicorn Uvicorn worker and threads in memory-constrained environments
-CMD ["gunicorn", "backend.main:app", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "--threads", "4", "--max-requests", "500", "--max-requests-jitter", "50"]
+# Run with single Gunicorn Uvicorn worker in memory-constrained environments
+CMD ["gunicorn", "backend.main:app", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "--timeout", "120", "--keep-alive", "5"]

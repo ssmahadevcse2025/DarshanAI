@@ -50,9 +50,12 @@ import ctypes
 
 @app.on_event("startup")
 async def startup_event():
-    # Create all DB tables
-    Base.metadata.create_all(bind=engine)
-    seed_database()
+    # Safely initialize database tables and seed data
+    try:
+        Base.metadata.create_all(bind=engine)
+        seed_database()
+    except Exception as e:
+        print(f"[STARTUP DB INITIALIZATION NOTICE] {e}")
     
     # Start proactive memory trimmer to strictly prevent Render OOM restarts
     async def memory_trimmer_loop():

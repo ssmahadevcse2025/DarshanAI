@@ -11,9 +11,8 @@ services:
     name: darshanai-backend
     runtime: python
     region: oregon
-    plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn backend.main:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT --threads 4 --max-requests 500 --max-requests-jitter 50"
+    startCommand: "gunicorn backend.main:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT --timeout 120 --keep-alive 5"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
